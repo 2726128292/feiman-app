@@ -66,3 +66,54 @@
     animation: fade-up 0.4s ease-out both;
   }
 }
+
+/* ========== 页面转场动画（路由切换） ========== */
+
+/* 左滑进入（进入子页面：从右滑入） */
+.slide-left-enter-active { transition: all 0.25s ease-out; }
+.slide-left-leave-active { transition: all 0.15s ease-in; }
+.slide-left-enter-from { transform: translateX(30px); opacity: 0; }
+.slide-left-leave-to { transform: translateX(-20px); opacity: 0; }
+
+/* 右滑进入（返回父页面：从左滑入） */
+.slide-right-enter-active { transition: all 0.25s ease-out; }
+.slide-right-leave-active { transition: all 0.15s ease-in; }
+.slide-right-enter-from { transform: translateX(-30px); opacity: 0; }
+.slide-right-leave-to { transform: translateX(20px); opacity: 0; }
+
+/* 增强版淡入淡出（同级页面切换） */
+.page-fade-enter-active { transition: all 0.2s ease-out; }
+.page-fade-leave-active { transition: all 0.15s ease-in; }
+.page-fade-enter-from { opacity: 0; transform: scale(0.98); }
+.page-fade-leave-to { opacity: 0; transform: scale(0.98); }
+
+/* ========== 暗色模式全局补丁 ========== */
+.dark {
+  /* 搜索下拉框 */
+  .search-dropdown,
+  .search-results-dropdown {
+    background-color: #1e293b !important;
+    border-color: #334155 !important;
+  }
+  /* Toast 通知 */
+  .toast-container .toast-item {
+    background-color: #1e293b !important;
+    color: #f1f5f9 !important;
+    border-color: #334155 !important;
+  }
+  /* 下拉刷新指示器 */
+  .pull-refresh-indicator {
+    color: #94a3b8 !important;
+  }
+  /* 长按菜单 */
+  .long-press-menu {
+    background-color: #1e293b !important;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4) !important;
+  }
+  .long-press-menu button {
+    color: #cbd5e1 !important;
+  }
+  .long-press-menu button:hover {
+    background-color: #334155 !important;
+  }
+}

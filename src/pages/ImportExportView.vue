@@ -18,10 +18,59 @@
 
       <!-- ====== 未展开时：格式卡片列表 ====== -->
       <div v-if="!expandedFormat" class="space-y-3">
+        <!-- 全量备份卡片 -->
+        <div class="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-2xl p-5 border border-blue-100 mb-4">
+          <div class="flex items-start gap-3">
+            <div class="w-10 h-10 rounded-xl bg-blue-500 flex items-center justify-center shrink-0">
+              <Database :size="20" class="text-white" />
+            </div>
+            <div class="flex-1">
+              <h3 class="text-sm font-bold text-slate-800">全量数据备份</h3>
+              <p class="text-xs text-slate-500 mt-0.5 leading-relaxed">
+                导出所有学习记录、路径、闪卡、讲解、设置等数据为一个 JSON 文件。可用于恢复或迁移。
+              </p>
+              <div class="flex gap-2 mt-3">
+                <button
+                  class="px-4 py-2 rounded-xl bg-[#4F6EF7] text-white text-xs font-semibold active:bg-blue-600 flex items-center gap-1.5"
+                  @click="exportAllData"
+                >
+                  <Download :size="13" /> 导出全部数据
+                </button>
+                <label class="px-4 py-2 rounded-xl border-2 border-dashed border-blue-300 text-blue-600 text-xs font-semibold cursor-pointer hover:bg-blue-50 active:bg-blue-100 flex items-center gap-1.5 transition-colors">
+                  <Upload :size="13" /> 导入恢复
+                  <input type="file" accept=".json" class="hidden" @change="importAllData" />
+                </label>
+              </div>
+              <p v-if="lastBackupTime" class="text-[11px] text-slate-400 mt-2">
+                上次备份：{{ lastBackupTime }}
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <!-- 自动备份历史 -->
+        <div v-if="autoBackups.length > 0" class="mt-3 pt-3 border-t border-blue-100">
+          <p class="text-xs font-medium text-slate-600 mb-2">自动备份记录</p>
+          <div class="space-y-1.5">
+            <div
+              v-for="backup in autoBackups.slice(0, 5)"
+              :key="backup.date"
+              class="flex items-center justify-between py-1.5 px-2.5 rounded-lg bg-slate-50"
+            >
+              <span class="text-[11px] text-slate-500">{{ formatDateTime(new Date(backup.date)) }}</span>
+              <span class="text-[11px] text-slate-400">{{ formatSize(backup.size) }}</span>
+              <button
+                class="text-[11px] text-blue-500 font-medium hover:text-blue-600"
+                @click="restoreAutoBackup(backup.date)"
+              >恢复</button>
+            </div>
+          </div>
+        </div>
+
         <div
           v-for="fmt in formatCards"
           :key="fmt.type"
-          class="bg-white rounded-2xl p-4 shadow-sm cursor-pointer active:shadow-md transition-shadow"
+          class="bg-white adow-sm cursor-pointer active:shadow-md transition-shadow"
           @click="expandedFormat = fmt.type"
         >
           <div class="flex items-start gap-3">
@@ -30,7 +79,7 @@
               :style="{ background: fmt.bgColor, color: fmt.textColor }"
             >{{ fmt.badge }}</div>
             <div class="flex-1 min-w-0">
-              <h3 class="text-sm font-semibold text-slate-800">{{ fmt.title }}</h3>
+              <h3 class="text-sm font-semibold text-slate-800 dark:text-slate-200">{{ fmt.title }}</h3>
               <p class="text-xs text-slate-400 mt-0.5">{{ fmt.desc }}</p>
             </div>
             <ChevronRight :size="18" class="text-slate-300 shrink-0 mt-1" />
@@ -65,7 +114,7 @@
         </button>
 
         <!-- ========== TXT 格式详情 ========== -->
-        <div v-if="expandedFormat === 'txt'" class="bg-white rounded-2xl shadow-sm overflow-hidden">
+        <div v-if="expandedFormat === 'txt'" class="bg-white dark:bg-slate-800 rounded-2xl shadow-sm overflow-hidden">
           <div class="p-4 border-b border-slate-100">
             <div class="flex items-center gap-2 mb-1">
               <span class="px-2 py-0.5 rounded text-xs font-bold bg-blue-100 text-blue-700">TXT</span>
@@ -143,7 +192,7 @@ TCP三次握手的过程</pre>
         </div>
 
         <!-- ========== JSON 格式详情 ========== -->
-        <div v-if="expandedFormat === 'json'" class="bg-white rounded-2xl shadow-sm overflow-hidden">
+        <div v-if="expandedFormat === 'json'" class="bg-white dark:bg-slate-800 rounded-2xl shadow-sm overflow-hidden">
           <div class="p-4 border-b border-slate-100">
             <div class="flex items-center gap-2 mb-1">
               <span class="px-2 py-0.5 rounded text-xs font-bold bg-emerald-100 text-emerald-700">JSON</span>
@@ -351,15 +400,127 @@ TCP三次握手的过程</pre>
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, computed } from 'vue'
 import { useRouter } from 'vue-router'
-import { ArrowLeft, ChevronRight, ShieldCheck, Upload, Download, Check, Archive } from 'lucide-vue-next'
+import { ArrowLeft, ChevronRight, ShieldCheck, Upload, Download, Check, Archive, Database } from 'lucide-vue-next'
 import { mockCards } from '@/utils/mock'
+import { useToast } from '@/composables/useToast'
+import { useAutoBackup } from '@/composables/useAutoBackup'
 
 const router = useRouter()
+const { showToast } = useToast()
+
+// 自动备份功能
+const { getBackups, restoreFromBackup } = useAutoBackup()
+const autoBackups = computed(() => getBackups())
+
+/** 从自动备份恢复数据 */
+function restoreAutoBackup(date: string): void {
+  if (!window.confirm('确定要从该备份恢复数据？当前数据将被覆盖。')) return
+  const success = restoreFromBackup(date)
+  if (success) {
+    showToast('备份恢复成功！页面将刷新...', 'success')
+    setTimeout(() => window.location.reload(), 1500)
+  } else {
+    showToast('恢复失败，备份可能已损坏', 'error')
+  }
+}
+
+/** 格式化文件大小 */
+function formatSize(size: number): string {
+  if (size < 1024) return `${size} B`
+  if (size < 1024 * 1024) return `${(size / 1024).toFixed(1)} KB`
+  return `${(size / 1024 / 1024).toFixed(1)} MB`
+}
 
 // 当前展开的格式详情
 const expandedFormat = ref<string | null>(null)
+
+// 上次备份时间
+const lastBackupTime = ref('')
+
+/** 格式化日期时间显示 */
+function formatDateTime(date: Date): string {
+  const y = date.getFullYear()
+  const m = String(date.getMonth() + 1).padStart(2, '0')
+  const d = String(date.getDate()).padStart(2, '0')
+  const h = String(date.getHours()).padStart(2, '0')
+  const min = String(date.getMinutes()).padStart(2, '0')
+  return `${y}-${m}-${d} ${h}:${min}`
+}
+
+// ====== 全量数据导出/导入 ======
+
+/**
+ * 导出所有 feiman_ 开头的 localStorage 数据为 JSON 备份文件
+ */
+function exportAllData() {
+  const backup: {
+    version: string
+    exportedAt: string
+    appName: string
+    data: Record<string, any>
+  } = {
+    version: '1.0',
+    exportedAt: new Date().toISOString(),
+    appName: '费曼学习法App',
+    data: {} as Record<string, any>
+  }
+
+  // 收集所有 feiman_ 开头的 localStorage 数据
+  for (let i = 0; i < localStorage.length; i++) {
+    const key = localStorage.key(i)
+    if (key?.startsWith('feiman_')) {
+      try {
+        backup.data[key] = JSON.parse(localStorage.getItem(key)!)
+      } catch {
+        backup.data[key] = localStorage.getItem(key)
+      }
+    }
+  }
+
+  const blob = new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = `feiman-backup-${new Date().toISOString().slice(0, 10)}.json`
+  a.click()
+  URL.revokeObjectURL(url)
+
+  lastBackupTime.value = formatDateTime(new Date())
+  showToast('数据导出成功！', 'success')
+}
+
+/**
+ * 从 JSON 备份文件导入并恢复所有数据
+ */
+async function importAllData(e: Event) {
+  const file = (e.target as HTMLInputElement).files?.[0]
+  if (!file) return
+
+  try {
+    const text = await file.text()
+    const backup = JSON.parse(text)
+
+    if (!backup.data || !backup.appName) {
+      showToast('无效的备份文件', 'error')
+      return
+    }
+
+    // 确认覆盖
+    if (!window.confirm(`即将导入 ${Object.keys(backup.data).length} 条数据。\n现有数据将被覆盖，是否继续？`)) return
+
+    // 写入 localStorage
+    for (const [key, value] of Object.entries(backup.data)) {
+      localStorage.setItem(key, JSON.stringify(value))
+    }
+
+    showToast('数据导入成功！页面将刷新...', 'success')
+    setTimeout(() => window.location.reload(), 1500)
+  } catch (err) {
+    showToast('导入失败：' + (err instanceof Error ? err.message : '文件格式错误'), 'error')
+  }
+}
 
 // 预览数据
 interface PreviewItem { question: string; answer: string; topic?: string }

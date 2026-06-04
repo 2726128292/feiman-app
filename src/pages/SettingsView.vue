@@ -1,10 +1,10 @@
 <template>
-  <div class="min-h-screen bg-slate-50 pb-24">
+  <div class="min-h-screen bg-slate-50 dark:bg-slate-900 pb-24">
     <div class="max-w-md mx-auto px-5 pt-6 space-y-4">
 
       <!-- 顶部标题区 -->
       <div>
-        <h1 class="text-2xl font-bold text-slate-900">我的</h1>
+        <h1 class="text-2xl font-bold text-slate-900 dark:text-slate-100">我的</h1>
         <p class="text-sm text-slate-500 mt-0.5">学习偏好与数据管理</p>
       </div>
 
@@ -27,6 +27,25 @@
         </div>
       </div>
 
+      <!-- 主题色选择 -->
+      <div class="bg-white dark:bg-slate-800 rounded-2xl shadow-sm p-4 space-y-3">
+        <div class="flex items-center gap-2">
+          <Palette :size="16" class="text-slate-500" />
+          <span class="text-sm font-semibold text-slate-800 dark:text-slate-200">主题颜色</span>
+        </div>
+        <div class="flex gap-2.5">
+          <button
+            v-for="color in themeColors"
+            :key="color.value"
+            class="w-8 h-8 rounded-full ring-2 transition-all shrink-0"
+            :class="currentThemeColor === color.value ? 'ring-offset-2 ring-offset-white dark:ring-offset-slate-800 scale-110' : 'ring-transparent hover:scale-105'"
+            :style="{ backgroundColor: color.hex, '--tw-ring-color': color.hex }"
+            :title="color.name"
+            @click="setThemeColor(color.value)"
+          />
+        </div>
+      </div>
+
       <!-- 设置列表 - 每项都有实际功能 -->
       <div class="bg-white rounded-2xl shadow-sm divide-y divide-slate-100">
 
@@ -40,7 +59,7 @@
               <Moon :size="18" :class="isDark ? 'text-[#4F6EF7]' : 'text-slate-400'" />
             </div>
             <div class="text-left min-w-0">
-              <p class="text-sm font-semibold text-slate-800">主题色与暗黑模式</p>
+              <p class="text-sm font-semibold text-slate-800 dark:text-slate-200">主题色与暗黑模式</p>
               <p class="text-xs mt-0.5" :class="isDark ? 'text-[#4F6EF7]' : 'text-slate-400'">
                 {{ isDark ? '已开启深色模式' : '跟随系统 / 浅色模式' }}
               </p>
@@ -83,6 +102,50 @@
             />
           </div>
         </button>
+
+        <!-- 推送通知 -->
+        <div class="flex items-center justify-between py-3 px-1">
+          <div class="flex items-center gap-3">
+            <div class="w-9 h-9 rounded-xl bg-indigo-50 flex items-center justify-center">
+              <Bell :size="18" class="text-indigo-500" />
+            </div>
+            <div>
+              <p class="text-sm font-medium text-slate-800">推送通知</p>
+              <p class="text-xs text-slate-400">学习时间提醒（需授权）</p>
+            </div>
+          </div>
+          <button
+            class="shrink-0 relative cursor-pointer rounded-full transition-colors duration-200 focus:outline-none"
+            style="width: 44px; height: 24px;"
+            :style="{ backgroundColor: pushEnabled ? '#10B981' : '#E2E8F0' }"
+            role="switch"
+            :aria-checked="pushEnabled"
+            @click="togglePushNotification"
+          >
+            <span
+              class="absolute top-[2px] rounded-full bg-white shadow-sm transition-all duration-200"
+              style="width: 20px; height: 20px;"
+              :style="{ left: pushEnabled ? '22px' : '2px' }"
+            />
+          </button>
+        </div>
+
+        <!-- 智能调度提醒 -->
+        <div class="bg-slate-50 rounded-xl p-3 mx-3 mb-2 space-y-2">
+          <div class="flex items-center gap-2">
+            <Clock3 :size="14" class="text-slate-400" />
+            <span class="text-xs font-medium text-slate-600">提醒时间</span>
+          </div>
+          <input
+            v-model="reminderTime"
+            type="time"
+            class="w-full px-3 py-2 text-sm border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+            @change="saveReminderTime"
+          />
+          <p class="text-[11px] text-slate-400 leading-relaxed">
+            到达设定时间后，浏览器会发送学习提醒通知。系统还会根据你的活跃时段推荐最佳学习时间。
+          </p>
+        </div>
 
         <!-- 数据中心 -->
         <button
@@ -245,7 +308,7 @@
 
       <!-- 隐私信息弹窗 -->
       <div v-if="showPrivacyInfo" class="fixed inset-0 z-50 bg-black/40 flex items-end justify-center" @click.self="showPrivacyInfo = false">
-        <div class="bg-white w-full max-w-md rounded-t-3xl p-6 animate-slide-up">
+        <div class="bg-white dark:bg-slate-800 w-full max-w-md rounded-t-3xl p-6 animate-slide-up">
           <div class="w-10 h-1 bg-slate-300 rounded-full mx-auto mb-4" />
           <h3 class="text-lg font-bold text-slate-900 mb-3">隐私与离线说明</h3>
           <div class="space-y-3 text-sm text-slate-600 leading-relaxed">
@@ -291,9 +354,9 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch } from 'vue'
+import { ref, computed, watch, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
-import { Moon, Bell, Database, Download, Shield, ChevronRight, Sparkles, LoaderCircle, Check, ShieldCheck, WifiOff, Key, RotateCcw, Power } from 'lucide-vue-next'
+import { Moon, Bell, Database, Download, Shield, ChevronRight, Sparkles, LoaderCircle, Check, ShieldCheck, WifiOff, Key, RotateCcw, Power, Palette, Clock3 } from 'lucide-vue-next'
 import {
   isAIReady,
   isAIEnabled,
@@ -306,6 +369,37 @@ import {
 } from '@/composables/useDeepSeek'
 
 const router = useRouter()
+
+// ====== 主题色选择 ======
+
+/** 可选的主题色列表 */
+const themeColors = [
+  { name: '默认蓝', value: '#4F6EF7', hex: '#4F6EF7' },
+  { name: '翡翠绿', value: '#10B981', hex: '#10B981' },
+  { name: '活力橙', value: '#F59E0B', hex: '#F59E0B' },
+  { name: '热情红', value: '#EF4444', hex: '#EF4444' },
+  { name: '梦幻紫', value: '#8B5CF6', hex: '#8B5CF6' },
+  { name: '青碧蓝', value: '#06B6D4', hex: '#06B6D4' },
+]
+
+/** 当前选中的主题色 */
+const currentThemeColor = ref(localStorage.getItem('feiman_theme_color') || '#4F6EF7')
+
+/**
+ * 设置主题色
+ * 存储到 localStorage 并通过 CSS 变量实时切换
+ */
+function setThemeColor(color: string) {
+  currentThemeColor.value = color
+  localStorage.setItem('feiman_theme_color', color)
+  // 通过 CSS 变量实时切换主题色
+  document.documentElement.style.setProperty('--color-primary', color)
+}
+
+// 页面加载时应用已保存的主题色
+watch(currentThemeColor, (newColor) => {
+  document.documentElement.style.setProperty('--color-primary', newColor)
+}, { immediate: true })
 
 // ====== 用户名编辑 ======
 const showNameEdit = ref(false)
@@ -325,6 +419,96 @@ function toggleDarkMode() {
 const remindersOn = ref(true)
 function toggleReminders() {
   remindersOn.value = !remindersOn.value
+}
+
+// ====== 推送通知（浏览器 Web Push）======
+const pushEnabled = ref(false)
+
+/** 检查浏览器通知权限状态 */
+function checkPushStatus(): void {
+  pushEnabled.value = Notification.permission === 'granted'
+}
+
+/** 切换推送通知开关 */
+async function togglePushNotification(): Promise<void> {
+  if (!('Notification' in window)) {
+    toastMessage.value = '您的浏览器不支持推送通知'
+    showToast.value = true
+    setTimeout(() => { showToast.value = false }, 2000)
+    return
+  }
+
+  if (pushEnabled.value) {
+    // 已开启 → 关闭（浏览器 API 不支持真正关闭，只能提示用户）
+    toastMessage.value = '请在浏览器设置中关闭通知权限'
+    showToast.value = true
+    setTimeout(() => { showToast.value = false }, 2000)
+    return
+  }
+
+  // 未开启 → 请求授权
+  const permission = await Notification.requestPermission()
+  if (permission === 'granted') {
+    pushEnabled.value = true
+    toastMessage.value = '推送通知已开启！将在学习时间提醒你'
+    showToast.value = true
+    setTimeout(() => { showToast.value = false }, 2000)
+    // 发送测试通知
+    new Notification('费曼学习法', {
+      body: '通知已开启！你会在设定的时间收到学习提醒 🎉',
+      icon: '/vue.svg',
+    })
+  } else {
+    toastMessage.value = '通知权限被拒绝'
+    showToast.value = true
+    setTimeout(() => { showToast.value = false }, 2000)
+  }
+}
+
+// ====== 智能调度提醒 ======
+const reminderTime = ref('20:00')
+
+/** 从 localStorage 加载提醒时间 */
+function loadReminderTime(): void {
+  const saved = localStorage.getItem('feiman_reminder_time')
+  if (saved) reminderTime.value = saved
+}
+
+/** 保存提醒时间并重新安排定时检查 */
+function saveReminderTime(): void {
+  localStorage.setItem('feiman_reminder_time', reminderTime.value)
+  toastMessage.value = `提醒时间已设为 ${reminderTime.value}`
+  showToast.value = true
+  setTimeout(() => { showToast.value = false }, 2000)
+  scheduleReminder()
+}
+
+/**
+ * 安排提醒检查（每分钟检查一次是否到达设定时间）
+ * 到达设定时间且今天尚未提醒过，则发送浏览器通知
+ */
+function scheduleReminder(): void {
+  // 清除已有的定时器
+  if ((window as any).__reminderInterval) {
+    clearInterval((window as any).__reminderInterval)
+  }
+
+  ;(window as any).__reminderInterval = setInterval(() => {
+    const now = new Date()
+    const currentTime = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`
+    const today = now.toISOString().slice(0, 10)
+    const lastReminded = localStorage.getItem('feiman_last_reminder_date')
+
+    if (currentTime === reminderTime.value && today !== lastReminded) {
+      if (Notification.permission === 'granted') {
+        new Notification('📚 学习时间到了！', {
+          body: '今天还没有完成学习目标哦，快来费曼讲解一下吧！',
+          tag: 'feiman-reminder',
+        })
+      }
+      localStorage.setItem('feiman_last_reminder_date', today)
+    }
+  }, 60000) // 每分钟检查一次
 }
 
 // ====== PWA 安装 ======
@@ -390,6 +574,13 @@ async function saveKey() {
     alert('DeepSeek AI 连接成功！')
   } catch { /* key saved but validation failed */ }
 }
+
+// 页面挂载时初始化推送状态和智能调度
+onMounted(() => {
+  checkPushStatus()
+  loadReminderTime()
+  scheduleReminder()
+})
 </script>
 
 <style scoped>

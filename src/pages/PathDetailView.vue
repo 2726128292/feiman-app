@@ -22,6 +22,13 @@
         >
           {{ isEditMode ? '完成' : '编辑' }}
         </button>
+        <!-- 分享路径按钮 -->
+        <button
+          class="shrink-0 px-3 py-1.5 rounded-lg text-xs font-medium bg-green-50 text-green-600 hover:bg-green-100 active:bg-green-200 transition-colors flex items-center gap-1"
+          @click="sharePathLink"
+        >
+          <Share2 :size="14" /> 分享
+        </button>
       </div>
 
       <!-- 总进度概览 -->
@@ -138,6 +145,15 @@
                     >
                       <X :size="13" />
                     </button>
+
+                    <!-- 生成闪卡按钮（编辑模式下显示） -->
+                    <button
+                      v-if="isEditMode"
+                      class="text-xs text-purple-500 hover:text-purple-600 font-medium flex items-center gap-0.5 shrink-0"
+                      @click="generateFlashcard(chapter.id, item)"
+                    >
+                      <Layers :size="11" /> 闪卡
+                    </button>
                   </div>
 
                   <!-- 添加知识点输入框 -->
@@ -202,6 +218,27 @@
               开始学习此章节 →
             </button>
           </div>
+
+          <!-- ====== 功能18：笔记入口 ====== -->
+          <div class="px-4 pb-3 pt-0">
+            <div class="mt-2 pt-2 border-t border-dashed border-slate-200">
+              <button
+                class="w-full flex items-center gap-1.5 text-xs text-slate-400 hover:text-blue-500 py-1.5"
+                @click="toggleNoteEditor(chapter.id)"
+              >
+                <StickyNote :size="13" />
+                {{ getChapterNote(chapter.id) ? '编辑笔记' : '添加笔记' }}
+              </button>
+              <textarea
+                v-if="showNoteEditor === chapter.id"
+                v-model="noteContents[chapter.id]"
+                placeholder="记录这个章节的学习心得、灵感..."
+                class="w-full mt-2 px-3 py-2 text-xs border border-slate-200 rounded-lg resize-none focus:outline-none focus:ring-1 focus:ring-blue-400"
+                rows="3"
+                @blur="saveChapterNote(chapter.id)"
+              />
+            </div>
+          </div>
         </div>
       </div>
 
@@ -260,12 +297,52 @@ import {
   Trash2,
   ChevronDown,
   ChevronUp,
+  Layers,
+  StickyNote,
 } from 'lucide-vue-next'
 import type { StudyTopic, Chapter, KnowledgePoint } from '@/types'
+import { useXPSystem } from '@/composables/useXPSystem'
+import { useNotes } from '@/composables/useNotes'
+import { triggerHaptic } from '@/composables/useHaptic'
 
 const route = useRoute()
 const router = useRouter()
 const showToast = inject<(message: string, type?: 'success' | 'error' | 'info' | 'warning', duration?: number) => void>('toast') || ((msg: string) => console.log(msg))
+
+// ====== 功能15：XP 经验值系统 ======
+const xpSystem = useXPSystem()
+
+// ====== 功能18：笔记系统 ======
+const notesSystem = useNotes()
+const showNoteEditor = ref<string | null>(null)  // 当前展开笔记编辑器的章节ID
+const noteContents = ref<Record<string, string>>({})  // 各章节的笔记内容缓存
+
+/** 获取某章节的笔记内容 */
+function getChapterNote(chapterId: string): string {
+  if (noteContents.value[chapterId] !== undefined) return noteContents.value[chapterId]
+  const notes = notesSystem.getTopicNotes(chapterId)
+  noteContents.value[chapterId] = notes.length > 0 ? notes[0].content : ''
+  return noteContents.value[chapterId]
+}
+
+/** 切换笔记编辑器显示状态 */
+function toggleNoteEditor(chapterId: string): void {
+  if (showNoteEditor.value === chapterId) {
+    showNoteEditor.value = null
+  } else {
+    showNoteEditor.value = chapterId
+    getChapterNote(chapterId)
+  }
+}
+
+/** 保存笔记 */
+function saveChapterNote(chapterId: string): void {
+  const content = noteContents.value[chapterId] || ''
+  if (content.trim()) {
+    notesSystem.upsertNote(chapterId, content)
+    showToast('笔记已保存', 'success')
+  }
+}
 
 // ==================== 数据读取 ====================
 
@@ -419,7 +496,12 @@ function toggleChapterComplete(chapterId: string): void {
   ch.progress = newState ? 100 : 0
   saveTopicsToStorage()
 
-  if (newState) showToast(`「${ch.title}」已完成！`, 'success')
+  if (newState) {
+    triggerHaptic('success') // 章节全部完成触觉反馈
+    showToast(`「${ch.title}」已完成！`, 'success')
+    // ====== 功能15：完成章节获得 XP ======
+    xpSystem.gainXP('chapter_complete')
+  }
 }
 
 /** 删除章节 */
@@ -531,6 +613,7 @@ function toggleItem(chapterId: string, itemId: string): void {
   if (!item) return
 
   item.done = !item.done
+  triggerHaptic('selection') // 知识点勾选触觉反馈
 
   // 更新章节整体状态
   updateChapterStatus(ch)
@@ -651,6 +734,136 @@ function saveTopicsToStorage(): void {
     }
   } catch {
     /* 静默处理 */
+  }
+}
+
+// ==================== 一键生成闪卡 ====================
+
+/**
+ * 根据知识点自动生成闪卡，保存到 feiman_review_cards 或 feiman_cards 中
+ * @param chapterId 所属章节ID
+ * @param item 知识点对象
+ */
+function generateFlashcard(chapterId: string, item: KnowledgePoint): void {
+  // 查找对应章节
+  const chapter = findChapter(chapterId)
+  if (!chapter) return
+
+  // 读取现有闪卡数据（兼容两种存储 key）
+  const cardsRaw = localStorage.getItem('feiman_review_cards') || localStorage.getItem('feiman_cards')
+  const cards = cardsRaw ? JSON.parse(cardsRaw) : []
+
+  // 检查是否已存在同名闪卡（防止重复生成）
+  const exists = cards.some((c: any) => c.question === item.title)
+  if (exists) {
+    showToast('该知识点已有对应闪卡', 'info')
+    return
+  }
+
+  // 构建新闪卡对象
+  const newCard = {
+    id: crypto.randomUUID(),
+    question: item.title,
+    answer: `【${topic.value?.title || ''}】${chapter.title} - 知识点\n\n请用自己的话解释这个概念，检验是否真正掌握。`,
+    tags: ['路径', topic.value?.title || '', chapter.title],
+    deck: 'default',
+    interval: 1,
+    easeFactor: 2.5,
+    repetition: 0,
+    nextReview: new Date(Date.now() + 86400000).toISOString(),
+    reviewCount: 0,
+    createdAt: new Date().toISOString(),
+    source: 'knowledge_point' as string,
+  }
+
+  cards.push(newCard)
+
+  // 保存回 localStorage（优先使用 feiman_review_cards）
+  localStorage.setItem('feiman_review_cards', JSON.stringify(cards))
+
+  showToast(`「${item.title}」闪卡已生成`, 'success')
+}
+
+// ====== 学习路径分享链接 ======
+
+/**
+ * 生成分享链接并复制到剪贴板
+ * 将路径数据编码为 URL-safe base64，附加到当前 URL 后作为查询参数
+ */
+function sharePathLink(): void {
+  if (!topic.value) return
+
+  // 将路径数据编码为 URL-safe 的 base64
+  const shareData = {
+    title: topic.value.title,
+    tags: topic.value.tags,
+    chapters: topic.value.chapters.map(ch => ({
+      title: ch.title,
+      items: ch.items?.map(it => it.title) || [],
+    })),
+    source: '费曼学习法App',
+  }
+
+  const json = JSON.stringify(shareData)
+  const encoded = btoa(encodeURIComponent(json))
+
+  // 生成本地分享链接（实际部署后替换为真实域名）
+  const shareUrl = `${window.location.origin}${window.location.pathname}?import_path=${encoded}`
+
+  // 复制到剪贴板
+  if (navigator.clipboard) {
+    navigator.clipboard.writeText(shareUrl).then(() => {
+      showToast('分享链接已复制！', 'success')
+    })
+  } else {
+    // 降级方案：使用 textarea 复制
+    const ta = document.createElement('textarea')
+    ta.value = shareUrl
+    ta.style.cssText = 'position:fixed;left:-9999px'
+    document.body.appendChild(ta)
+    ta.select()
+    document.execCommand('copy')
+    document.body.removeChild(ta)
+    showToast('分享链接已复制！', 'success')
+  }
+}
+
+/**
+ * 从 URL 参数中导入学习路径
+ * 解码 base64 编码的路径数据并转换为 StudyTopic 格式
+ * @returns 导入的 StudyTopic 对象，如果无导入数据则返回 null
+ */
+function importPathFromUrl(): StudyTopic | null {
+  const params = new URLSearchParams(window.location.search)
+  const encoded = params.get('import_path')
+  if (!encoded) return null
+
+  try {
+    const json = decodeURIComponent(atob(encoded))
+    const data = JSON.parse(json)
+
+    return {
+      id: crypto.randomUUID(),
+      title: data.title + ' (导入)',
+      tags: data.tags || [],
+      status: 'active' as const,
+      progress: 0,
+      createdAt: new Date().toISOString(),
+      chapters: (data.chapters || []).map((ch: any, i: number) => ({
+        id: `import-ch-${i}`,
+        title: ch.title,
+        completed: false,
+        progress: 0,
+        items: (ch.items || []).map((it: string, j: number) => ({
+          id: `import-kp-${j}`,
+          title: it,
+          done: false,
+        })),
+      })),
+      color: '#4F6EF7',
+    }
+  } catch {
+    return null
   }
 }
 </script>

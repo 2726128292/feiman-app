@@ -132,6 +132,12 @@ const routes: RouteRecordRaw[] = [
     name: 'ai-assistant',
     component: defineAsyncComponent(() => import('@/pages/AIAssistantView.vue')),
   },
+  // 404 兜底页面 - 捕获所有未匹配的路由
+  {
+    path: '/:pathMatch(.*)*',
+    name: 'not-found',
+    component: defineAsyncComponent(() => import('@/pages/NotFoundView.vue')),
+  },
 ]
 
 const router = createRouter({

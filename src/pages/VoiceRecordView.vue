@@ -117,7 +117,46 @@
         </div>
       </div>
 
-      <!-- 底部按钮 -->
+      <!-- 保存录音按钮 -->
+      <button
+        v-if="hasRecorded"
+        class="w-full py-3 rounded-full border-2 border-emerald-200 text-emerald-600 text-sm font-medium active:bg-emerald-50 transition-colors mb-3"
+        @click="saveRecording"
+      >
+        💾 保存录音到本地
+      </button>
+
+      <!-- 历史录音列表 -->
+      <div v-if="historyList.length > 0" class="mt-2">
+        <h3 class="text-sm font-bold text-slate-400 mb-3 flex items-center gap-2">
+          <Clock :size="15" /> 历史录音 ({{ historyList.length }})
+        </h3>
+        <div class="space-y-2">
+          <div
+            v-for="item in historyList"
+            :key="item.id"
+            class="bg-slate-800/60 rounded-xl p-3 shadow-sm flex items-center gap-3"
+          >
+            <button
+              class="w-9 h-9 rounded-full bg-blue-500/20 flex items-center justify-center shrink-0 cursor-pointer"
+              @click="playHistoryItem(item)"
+            >
+              <Play :size="14" class="text-blue-400" />
+            </button>
+            <div class="flex-1 min-w-0">
+              <p class="text-xs font-medium text-slate-300 truncate">{{ item.topic || '未命名讲解' }}</p>
+              <p class="text-[11px] text-slate-500">
+                {{ item.duration }}秒 · {{ formatTimeAgo(item.createdAt) }} · 语速{{ item.wpm }}字/分
+              </p>
+            </div>
+            <button class="text-slate-600 hover:text-red-400 shrink-0 cursor-pointer" @click="deleteRecording(item.id)">
+              <Trash2 :size="14" />
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- 底部按钮（结束并分析） -->
       <button
         class="w-full py-3.5 rounded-full text-base font-semibold active:scale-[0.98] transition-transform duration-150"
         :class="hasRecorded
@@ -133,10 +172,14 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onUnmounted } from 'vue'
+import { ref, computed, onUnmounted, inject } from 'vue'
 import { useRouter } from 'vue-router'
+import { Clock, Play, Trash2 } from 'lucide-vue-next'
 
 const router = useRouter()
+
+// 注入全局 Toast
+const showToast = inject<(message: string, type?: 'success' | 'error' | 'info' | 'warning', duration?: number) => void>('toast') || ((msg: string) => console.log(msg))
 
 // ====== 状态 ======
 const isRecording = ref(false)
@@ -462,6 +505,123 @@ function handleFinish(): void {
   } else {
     router.push('/explain/new/diagnosis')
   }
+}
+
+// ====== 录音保存与历史 ======
+
+/** 当前讲解主题（用于录音命名） */
+const currentTopic = ref('未命名讲解')
+
+/** 历史录音列表 */
+const historyList = ref<Array<{
+  id: string
+  topic: string
+  duration: number
+  base64: string
+  mimeType: string
+  wpm: number
+  clarity: number
+  createdAt: string
+}>>([])
+
+/** 历史录音播放引用 */
+const historyAudioRef = ref<HTMLAudioElement | null>(null)
+
+/**
+ * 格式化时间差为相对时间描述
+ * @param isoDate ISO 格式日期字符串
+ * @returns 相对时间文本，如 "3分钟前"
+ */
+function formatTimeAgo(isoDate: string): string {
+  const now = Date.now()
+  const then = new Date(isoDate).getTime()
+  const diffMs = now - then
+  const diffMin = Math.floor(diffMs / 60000)
+  const diffHour = Math.floor(diffMs / 3600000)
+  const diffDay = Math.floor(diffMs / 86400000)
+
+  if (diffMin < 1) return '刚刚'
+  if (diffMin < 60) return `${diffMin}分钟前`
+  if (diffHour < 24) return `${diffHour}小时前`
+  if (diffDay < 7) return `${diffDay}天前`
+  return new Date(isoDate).toLocaleDateString('zh-CN')
+}
+
+/** 保存录音到 localStorage */
+function saveRecording(): void {
+  if (!audioUrl.value || !audioBlob.value) {
+    showToast('没有可保存的录音', 'warning')
+    return
+  }
+
+  audioBlob.value.arrayBuffer()
+    .then((buf: ArrayBuffer) => {
+      const bytes = new Uint8Array(buf)
+      let binary = ''
+      bytes.forEach((b: number) => { binary += String.fromCharCode(b) })
+      const base64 = btoa(binary)
+
+      const recordingsRaw = localStorage.getItem('feiman_voice_recordings')
+      const recordings = recordingsRaw ? JSON.parse(recordingsRaw) : []
+
+      recordings.unshift({
+        id: crypto.randomUUID(),
+        topic: currentTopic.value,
+        duration: Math.round(seconds.value),
+        base64,
+        mimeType: audioBlob.value!.type || 'audio/webm',
+        wpm: metrics.value.wpm,
+        clarity: metrics.value.clarityScore,
+        createdAt: new Date().toISOString(),
+      })
+
+      // 只保留最近 10 条
+      if (recordings.length > 10) recordings.length = 10
+
+      localStorage.setItem('feiman_voice_recordings', JSON.stringify(recordings))
+      showToast('录音已保存！', 'success')
+      loadRecordings() // 刷新列表
+    })
+    .catch(() => {
+      showToast('保存失败，请重试', 'error')
+    })
+}
+
+/** 加载历史录音列表 */
+function loadRecordings(): void {
+  try {
+    const raw = localStorage.getItem('feiman_voice_recordings')
+    historyList.value = raw ? JSON.parse(raw) : []
+  } catch {
+    historyList.value = []
+  }
+}
+
+// 初始加载历史录音
+loadRecordings()
+
+/** 删除指定历史录音 */
+function deleteRecording(id: string): void {
+  if (!window.confirm('确定删除这条录音？')) return
+  try {
+    let recordings = JSON.parse(localStorage.getItem('feiman_voice_recordings') || '[]')
+    recordings = recordings.filter((r: { id: string }) => r.id !== id)
+    localStorage.setItem('feiman_voice_recordings', JSON.stringify(recordings))
+    loadRecordings()
+    showToast('已删除', 'info')
+  } catch {
+    showToast('删除失败', 'error')
+  }
+}
+
+/** 播放历史录音 */
+function playHistoryItem(item: { mimeType: string; base64: string }): void {
+  if (historyAudioRef.value) {
+    historyAudioRef.value.pause()
+  }
+  const audio = new Audio(`data:${item.mimeType};base64,${item.base64}`)
+  historyAudioRef.value = audio
+  audio.play().catch(() => showToast('播放失败', 'error'))
 }
 
 // ====== 清理 ======

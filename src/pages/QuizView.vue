@@ -77,6 +77,9 @@
       >
         <p class="text-lg font-bold text-slate-800">测验完成！</p>
         <p class="text-sm text-slate-500 mt-1">得分：{{ score }} / {{ totalQuestions }}</p>
+        <p class="text-xs text-slate-400 mt-2">
+          {{ wrongCount > 0 ? `已将 ${wrongCount} 道错题加入闪卡复习池` : '全部正确！太棒了！' }}
+        </p>
       </div>
       </template>
     </div>
@@ -84,7 +87,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch, inject } from 'vue'
 import { generateQuiz, isAIReady, isLoading } from '@/composables/useDeepSeek'
 import { mockQuizQuestions } from '@/utils/mock'
 
@@ -93,8 +96,14 @@ const currentIndex = ref(0)
 const selectedOption = ref<number | null>(null)
 const score = ref(0)
 
+// 测验主题（用于记录和闪卡标签）
+const quizTopic = ref('通用')
+
 // AI 出题状态
 const isGeneratingQuiz = ref(false)
+
+// 注入全局 Toast
+const showToast = inject<(message: string, type?: 'success' | 'error' | 'info' | 'warning', duration?: number) => void>('toast') || ((msg: string) => console.log(msg))
 
 const totalQuestions = computed(() => questions.value.length)
 const currentQuestion = computed(() => questions.value[currentIndex.value])
@@ -104,6 +113,93 @@ const progressPercent = computed(() =>
 )
 
 const optionLabels = ['A', 'B', 'C', 'D']
+
+/** 答错题目数量 */
+const wrongCount = computed((): number => {
+  return questions.value.filter(
+    (q: { selectedAnswer?: number; correctIndex: number }) => q.selectedAnswer !== q.correctIndex
+  ).length
+})
+
+/**
+ * 保存本次测验结果到 localStorage
+ * 同时将错题自动生成闪卡加入复习池
+ */
+function saveQuizResult(): void {
+  const correctCount = questions.value.filter(
+    (q: { selectedAnswer?: number; correctIndex: number }) => q.selectedAnswer === q.correctIndex
+  ).length
+
+  const record = {
+    id: crypto.randomUUID(),
+    topic: quizTopic.value,
+    totalQuestions: questions.value.length,
+    correctCount,
+    score: Math.round((correctCount / questions.value.length) * 100),
+    wrongAnswers: questions.value
+      .filter((q: { selectedAnswer?: number; correctIndex: number }) => q.selectedAnswer !== q.correctIndex)
+      .map((q: { question: string; options: string[]; selectedAnswer?: number; correctIndex: number; explanation?: string }) => ({
+        question: q.question,
+        yourAnswer: q.options[q.selectedAnswer || 0],
+        correctAnswer: q.options[q.correctIndex],
+        explanation: q.explanation || '',
+      })),
+    createdAt: new Date().toISOString(),
+  }
+
+  // 保存测验记录到 feiman_quiz_records（保留最近30条）
+  try {
+    const recordsRaw = localStorage.getItem('feiman_quiz_records')
+    const records = recordsRaw ? JSON.parse(recordsRaw) : []
+    records.unshift(record)
+    if (records.length > 30) records.length = 30
+    localStorage.setItem('feiman_quiz_records', JSON.stringify(records))
+  } catch {
+    console.warn('保存测验记录失败')
+  }
+
+  // 错题自动生成闪卡加入复习池 feiman_review_cards
+  if (record.wrongAnswers.length > 0) {
+    try {
+      const cardsRaw = localStorage.getItem('feiman_review_cards') || '[]'
+      const cards = JSON.parse(cardsRaw)
+
+      for (const wrong of record.wrongAnswers) {
+        cards.push({
+          id: crypto.randomUUID(),
+          question: wrong.question,
+          answer: `${wrong.correctAnswer}\n\n解析：${wrong.explanation}`,
+          tags: ['错题', quizTopic.value],
+          deck: 'default',
+          interval: 1,
+          easeFactor: 2.5,
+          repetition: 0,
+          nextReview: new Date(Date.now() + 86400000).toISOString(),
+          reviewCount: 0,
+          createdAt: new Date().toISOString(),
+          source: 'quiz_wrong',
+        })
+      }
+
+      localStorage.setItem('feiman_review_cards', JSON.stringify(cards))
+      showToast(`已将 ${record.wrongAnswers.length} 道错题加入闪卡复习池`, 'success')
+    } catch {
+      console.warn('生成错题闪卡失败')
+    }
+  } else {
+    showToast('全部正确！太棒了！', 'success')
+  }
+}
+
+// 监听测验完成状态，自动保存结果
+watch(
+  () => selectedOption.value !== null && currentIndex.value >= totalQuestions.value - 1,
+  (isFinished) => {
+    if (isFinished) {
+      saveQuizResult()
+    }
+  },
+)
 
 function optionClass(idx: number): string {
   if (selectedOption.value === null) {

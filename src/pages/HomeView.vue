@@ -4,12 +4,23 @@
       <!-- 顶部问候区 -->
       <div class="flex items-start justify-between">
         <div>
-          <h1 class="text-2xl font-bold text-slate-900">{{ greeting }}，Alex</h1>
+          <div class="flex items-center gap-2">
+            <h1 class="text-2xl font-bold text-slate-900">{{ greeting }}，Alex</h1>
+            <!-- 功能15：等级徽章 -->
+            <span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-700">
+              Lv.{{ userLevel }}
+            </span>
+          </div>
           <p class="text-sm text-slate-500 mt-0.5">继续把复杂知识讲简单</p>
         </div>
-        <div class="flex flex-col items-center justify-center w-14 h-14 rounded-full bg-blue-50 border border-blue-100">
-          <span class="text-lg font-bold text-[#4F6EF7] leading-none">{{ streakDays }}</span>
-          <span class="text-[10px] text-blue-500 font-medium leading-none mt-0.5">连续</span>
+        <!-- 打卡火焰 -->
+        <div
+          v-if="streakDays > 0"
+          class="flex items-center gap-1 px-2.5 py-1 rounded-full bg-orange-50 cursor-pointer hover:bg-orange-100 transition-colors"
+          title="连续学习天数"
+        >
+          <Flame :size="16" :class="streakDays >= 7 ? 'text-orange-500' : streakDays >= 3 ? 'text-amber-400' : 'text-gray-400'" />
+          <span class="text-xs font-bold" :class="streakDays >= 7 ? 'text-orange-600' : 'text-slate-600'">{{ streakDays }}</span>
         </div>
       </div>
 
@@ -21,7 +32,7 @@
             v-model="searchQuery"
             type="text"
             placeholder="搜索主题、闪卡、讲解记录..."
-            class="flex-1 bg-transparent text-sm text-slate-800 placeholder:text-slate-400 outline-none"
+            class="flex-1 bg-transparent text-sm text-slate-800 placeholder:text-slate-400 outline-none search-input-main"
             @focus="showSearchResults = true"
             @input="onSearchInput"
           />
@@ -33,7 +44,7 @@
         <!-- 搜索结果下拉框 -->
         <div
           v-if="showSearchResults && searchQuery.length >= 2"
-          class="absolute top-full left-0 right-0 mt-2 bg-white rounded-2xl shadow-lg border border-slate-100 z-50 max-h-[70vh] overflow-y-auto"
+          class="absolute top-full left-0 right-0 mt-2 bg-white dark:bg-slate-800 rounded-2xl shadow-lg border border-slate-100 dark:border-slate-700 z-50 max-h-[70vh] overflow-y-auto"
         >
           <!-- 无结果提示 -->
           <div v-if="!hasAnySearchResults" class="p-4 text-center text-sm text-slate-400">
@@ -48,10 +59,10 @@
               <div
                 v-for="(item, idx) in searchResults.topicResults.slice(0, 3)"
                 :key="'topic-' + idx"
-                class="px-4 py-2.5 hover:bg-slate-50 cursor-pointer active:bg-slate-100 transition-colors flex items-center justify-between"
+                class="px-4 py-2.5 hover:bg-slate-50 dark:hover:bg-slate-700 cursor-pointer active:bg-slate-100 dark:active:bg-slate-600 transition-colors flex items-center justify-between"
                 @click="navigateToTopic(item.id)"
               >
-                <span class="text-sm text-slate-700">{{ item.title }}</span>
+                <span class="text-sm text-slate-700 dark:text-slate-300">{{ item.title }}</span>
                 <ChevronRight :size="14" class="text-slate-300" />
               </div>
             </div>
@@ -62,10 +73,10 @@
               <div
                 v-for="(item, idx) in searchResults.cardResults.slice(0, 3)"
                 :key="'card-' + idx"
-                class="px-4 py-2.5 hover:bg-slate-50 cursor-pointer active:bg-slate-100 transition-colors flex items-center justify-between"
+                class="px-4 py-2.5 hover:bg-slate-50 dark:hover:bg-slate-700 cursor-pointer active:bg-slate-100 dark:active:bg-slate-600 transition-colors flex items-center justify-between"
                 @click="router.push('/review/cards')"
               >
-                <span class="text-sm text-slate-700 truncate max-w-[200px]">{{ item.question || item.answer }}</span>
+                <span class="text-sm text-slate-700 dark:text-slate-300 truncate max-w-[200px]">{{ item.question || item.answer }}</span>
                 <ChevronRight :size="14" class="text-slate-300 shrink-0" />
               </div>
             </div>
@@ -76,10 +87,10 @@
               <div
                 v-for="(item, idx) in searchResults.sessionResults.slice(0, 3)"
                 :key="'session-' + idx"
-                class="px-4 py-2.5 hover:bg-slate-50 cursor-pointer active:bg-slate-100 transition-colors flex items-center justify-between"
+                class="px-4 py-2.5 hover:bg-slate-50 dark:hover:bg-slate-700 cursor-pointer active:bg-slate-100 dark:active:bg-slate-600 transition-colors flex items-center justify-between"
                 @click="router.push('/explain/list')"
               >
-                <span class="text-sm text-slate-700 truncate max-w-[200px]">{{ item.content?.slice(0, 30) || '讲解记录' }}</span>
+                <span class="text-sm text-slate-700 dark:text-slate-300 truncate max-w-[200px]">{{ item.content?.slice(0, 30) || '讲解记录' }}</span>
                 <ChevronRight :size="14" class="text-slate-300 shrink-0" />
               </div>
             </div>
@@ -136,9 +147,9 @@
       </div>
 
       <!-- 本周成长曲线 -->
-      <div class="bg-white rounded-2xl shadow-sm p-5">
+      <div class="bg-white dark:bg-slate-800 rounded-2xl shadow-sm p-5">
         <div class="flex items-baseline justify-between mb-1">
-          <h2 class="text-base font-bold text-slate-800">本周成长曲线</h2>
+          <h2 class="text-base font-bold text-slate-800 dark:text-slate-200">本周成长曲线</h2>
         </div>
         <p class="text-xs text-slate-400 mb-4">
           讲解清晰度 +18%，薄弱点减少 7 个
@@ -197,16 +208,59 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
-import { BookOpen, Brain, Target, Route, Network, TrendingUp, Zap, Sparkles, Search, X, ChevronRight } from 'lucide-vue-next'
+import { BookOpen, Brain, Target, Route, Network, TrendingUp, Zap, Sparkles, Search, X, ChevronRight, Flame } from 'lucide-vue-next'
 import Card from '@/components/common/Card.vue'
 import { mockDashboardSummary, mockAnalytics } from '@/utils/mock'
+import { useXPSystem } from '@/composables/useXPSystem'
 
 const router = useRouter()
 const dashboard = mockDashboardSummary
 
-const streakDays = computed(() => mockDashboardSummary.dueCardsCount > 30 ? 12 : 8)
+// ====== 功能15：XP 等级显示 ======
+const xpSystem = useXPSystem()
+const userLevel = computed(() => xpSystem.getState().level)
+
+/** 连续打卡天数 */
+const streakDays = ref(0)
+
+/**
+ * 检测并更新打卡状态
+ * 从 localStorage 读取上次活跃日期和连续天数，
+ * 根据日期变化更新连续打卡记录
+ */
+function checkStreak(): void {
+  const today = new Date().toISOString().slice(0, 10)
+  const lastActive = localStorage.getItem('feiman_last_active_date')
+  let streak = parseInt(localStorage.getItem('feiman_streak_days') || '0')
+
+  if (lastActive !== today) {
+    // 今天是新的一天
+    const yesterday = new Date(Date.now() - 86400000).toISOString().slice(0, 10)
+
+    if (lastActive === yesterday) {
+      // 昨天有记录，连续天数+1
+      streak++
+    } else if (lastActive !== null && lastActive !== yesterday) {
+      // 断了，重置为1
+      streak = 1
+    } else {
+      // 首次使用
+      streak = 1
+    }
+
+    localStorage.setItem('feiman_streak_days', String(streak))
+    localStorage.setItem('feiman_last_active_date', today)
+  }
+
+  streakDays.value = streak
+}
+
+// 页面加载时检测打卡状态
+onMounted(() => {
+  checkStreak()
+})
 
 const greeting = computed(() => {
   const hour = new Date().getHours()
@@ -422,4 +476,14 @@ function navigateToTopic(topicId: string): void {
   closeSearch()
   router.push(`/paths/${topicId}`)
 }
+
+// ==================== 全局快捷键支持 ====================
+
+/** 监听来自 App.vue 的 focus-search 自定义事件，聚焦搜索框 */
+onMounted(() => {
+  window.addEventListener('focus-search', () => {
+    const el = document.querySelector('.search-input-main') as HTMLInputElement
+    el?.focus()
+  })
+})
 </script>

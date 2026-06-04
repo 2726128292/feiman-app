@@ -116,11 +116,29 @@
         title="已完成番茄数"
       />
     </div>
+
+    <!-- 白噪音选择（计时运行时显示） -->
+    <div v-if="isRunning" class="mt-4 pt-3 border-t border-slate-100">
+      <p class="text-[11px] text-slate-400 mb-2 text-center">背景音效</p>
+      <div class="flex justify-center gap-2 flex-wrap">
+        <button
+          v-for="sound in noiseOptions"
+          :key="sound.id"
+          class="px-3 py-1.5 rounded-full text-[11px] font-medium transition-all cursor-pointer"
+          :class="activeNoise === sound.id ? 'bg-[#4F6EF7] text-white shadow-md' : 'bg-slate-100 text-slate-500 hover:bg-slate-200'"
+          @click="toggleNoise(sound.id)"
+        >
+          {{ sound.label }}
+        </button>
+      </div>
+    </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onUnmounted, watch } from 'vue'
+import { ref, computed, onUnmounted, watch, inject } from 'vue'
+import { triggerHaptic } from '@/composables/useHaptic'
+import { useXPSystem } from '@/composables/useXPSystem'
 
 // ====== Props & Emits ======
 const props = withDefaults(defineProps<{
@@ -140,6 +158,10 @@ const emit = defineEmits<{
   (e: 'complete', data: { mode: string; duration: number }): void
   (e: 'modeChange', mode: string): void
 }>()
+
+// XP 经验值系统（番茄钟完成时获得 XP）
+const xpSystem = useXPSystem()
+const showToast = inject<(msg: string, type?: string) => void>('toast') || console.log
 
 // ====== 常量 ======
 const DURATION_OPTIONS = [
@@ -317,6 +339,9 @@ function skipToNext(): void {
 function handleComplete(isSkip = false): void {
   pauseTimer()
 
+  // 番茄钟结束时停止白噪音
+  stopNoise()
+
   if (!isSkip) {
     // 播放提示音
     playBeep()
@@ -324,6 +349,8 @@ function handleComplete(isSkip = false): void {
     isComplete.value = true
     showConfetti.value = true
     setTimeout(() => { showConfetti.value = false }, 3000)
+    // 番茄钟完成触觉反馈
+    triggerHaptic('success')
 
     if (currentMode.value === 'work') {
       completedPomodoros.value++
@@ -408,6 +435,145 @@ function playBeep(): void {
   }
 }
 
+// ==================== 白噪音（Web Audio API 生成，无需外部音频文件） ====================
+
+/** 白噪音选项列表 */
+const noiseOptions = [
+  { id: 'none', label: '静音' },
+  { id: 'rain', label: '雨声' },
+  { id: 'fire', label: '壁炉' },
+  { id: 'cafe', label: '咖啡厅' },
+  { id: 'wind', label: '风声' },
+]
+
+/** 当前激活的白噪音类型 */
+const activeNoise = ref('none')
+
+/** 噪音音频上下文引用 */
+let noiseAudioContext: AudioContext | null = null
+let noiseGainNode: GainNode | null = null
+
+/**
+ * 使用 Web Audio API 生成白噪声/环境音
+ * 无需外部音频文件，纯程序化生成
+ * @param type 噪音类型：rain / fire / cafe / wind
+ * @returns 音频上下文、源节点和增益节点引用
+ */
+function createNoise(type: string): { audioContext: AudioContext; sourceNode: AudioNode; gainNode: GainNode } {
+  const ctx = new AudioContext()
+  const gain = ctx.createGain()
+  // 设置音量为 30%，不会太吵
+  gain.gain.value = 0.3
+  gain.connect(ctx.destination)
+
+  if (type === 'rain' || type === 'wind') {
+    // 使用 BufferSource 生成粉红/白噪声模拟雨声或风声
+    const bufferSize = 2 * ctx.sampleRate
+    const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate)
+    const data = buffer.getChannelData(0)
+    for (let i = 0; i < bufferSize; i++) {
+      data[i] = (Math.random() * 2 - 1) * (type === 'wind' ? 0.5 : 0.3)
+    }
+    const source = ctx.createBufferSource()
+    source.buffer = buffer
+    source.loop = true
+    // 添加滤波器来塑造声音特性
+    const filter = ctx.createBiquadFilter()
+    if (type === 'rain') {
+      filter.type = 'lowpass'
+      filter.frequency.value = 1000 // 雨声：低通滤波，柔和
+    } else {
+      filter.type = 'highpass'
+      filter.frequency.value = 400 // 风声：高通滤波，更尖锐
+    }
+    source.connect(filter)
+    filter.connect(gain)
+    source.start()
+    return { audioContext: ctx, sourceNode: source, gainNode: gain }
+  }
+
+  if (type === 'fire') {
+    // 模拟壁炉火声（低频脉冲 + 随机噪声）
+    const bufferSize = 2 * ctx.sampleRate
+    const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate)
+    const data = buffer.getChannelData(0)
+    for (let i = 0; i < bufferSize; i++) {
+      data[i] = Math.sin(i * 0.02) * (Math.random() * 0.3) + (Math.random() * 2 - 1) * 0.1
+    }
+    const source = ctx.createBufferSource()
+    source.buffer = buffer
+    source.loop = true
+    const filter = ctx.createBiquadFilter()
+    filter.type = 'lowpass'
+    filter.frequency.value = 400 // 火声：低频为主
+    source.connect(filter)
+    filter.connect(gain)
+    source.start()
+    return { audioContext: ctx, sourceNode: source, gainNode: gain }
+  }
+
+  if (type === 'cafe') {
+    // 模拟咖啡厅环境音（低音量混合白噪声）
+    const bufferSize = 2 * ctx.sampleRate
+    const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate)
+    const data = buffer.getChannelData(0)
+    for (let i = 0; i < bufferSize; i++) {
+      data[i] = (Math.random() * 2 - 1) * 0.08 // 较低音量
+    }
+    const source = ctx.createBufferSource()
+    source.buffer = buffer
+    source.loop = true
+    const filter = ctx.createBiquadFilter()
+    filter.type = 'bandpass'
+    filter.frequency.value = 800 // 中频带通，模拟人声背景
+    filter.Q.value = 0.5
+    source.connect(filter)
+    filter.connect(gain)
+    source.start()
+    return { audioContext: ctx, sourceNode: source, gainNode: gain }
+  }
+
+  // none（静音）：返回空增益节点
+  return { audioContext: ctx, sourceNode: ctx.createGain(), gainNode: gain }
+}
+
+/**
+ * 切换白噪音类型
+ * @param noiseId 目标噪音ID
+ */
+function toggleNoise(noiseId: string): void {
+  // 如果点击的是当前已选中的，不做任何操作
+  if (activeNoise.value === noiseId) return
+
+  // 先停止当前正在播放的噪音
+  stopNoise()
+
+  activeNoise.value = noiseId
+
+  // 如果不是静音模式，创建并播放新噪音
+  if (noiseId !== 'none') {
+    const result = createNoise(noiseId)
+    noiseGainNode = result.gainNode
+    // 存储全局引用以便后续停止
+    ;(window as any).__noiseCtx = result.audioContext
+    ;(window as any).__noiseSrc = result.sourceNode
+  }
+}
+
+/**
+ * 停止当前播放的白噪音
+ */
+function stopNoise(): void {
+  const ctx = (window as any).__noiseCtx
+  if (ctx) {
+    ctx.close().catch(() => {})
+    ;(window as any).__noiseCtx = null
+    ;(window as any).__noiseSrc = null
+  }
+  activeNoise.value = 'none'
+  noiseGainNode = null
+}
+
 // ====== 自动启动 ======
 watch(() => props.autoStart, (val) => {
   if (val && !isRunning.value && !isComplete.value) {
@@ -421,6 +587,8 @@ onUnmounted(() => {
   if (audioContext) {
     audioContext.close().catch(() => {})
   }
+  // 确保白噪音也被停止
+  stopNoise()
 })
 </script>
 

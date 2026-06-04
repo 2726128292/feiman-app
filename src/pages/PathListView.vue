@@ -26,9 +26,35 @@
         <div
           v-for="topic in filteredTopics"
           :key="topic.id"
-          class="bg-white rounded-2xl p-4 shadow-sm flex items-center justify-between cursor-pointer active:scale-[0.98] transition-transform duration-150"
-          @click="router.push(`/paths/${topic.id}`)"
+          class="relative overflow-hidden rounded-2xl"
         >
+          <!-- 滑动操作背景层 -->
+          <div class="absolute inset-0 flex">
+            <div
+              class="flex-1 bg-emerald-500 flex items-center px-4"
+              :style="{ opacity: Math.min(1, swipeVal(topic.id) / 80) }"
+            >
+              <Check :size="18" class="text-white mr-1" /> 标记完成
+            </div>
+            <div
+              class="flex-1 bg-red-500 flex items-center justify-end px-4"
+              :style="{ opacity: Math.min(1, Math.abs(swipeVal(topic.id)) / 80) }"
+            >
+              删除 <Trash2 :size="18" class="text-white ml-1" />
+            </div>
+          </div>
+          <!-- 内容层 -->
+          <div
+            class="relative bg-white dark:bg-slate-800 rounded-2xl shadow-sm p-4 flex items-center justify-between cursor-pointer active:scale-[0.98] transition-transform duration-150 touch-none"
+            :style="{
+              transform: `translateX(${swipeVal(topic.id)}px)`,
+              transition: swipeVal(topic.id) === 0 ? 'transform 0.3s ease' : 'none'
+            }"
+            @click="router.push(`/paths/${topic.id}`)"
+            @touchstart.passive="handleSwipeStart(topic.id, $event)"
+            @touchmove.prevent="handleSwipeMove(topic.id, $event)"
+            @touchend="handleSwipeEnd(topic.id)"
+          >
           <!-- 左侧：图标 + 信息 -->
           <div class="flex items-center gap-3 flex-1 min-w-0">
             <!-- 彩色圆形图标 -->
@@ -66,6 +92,8 @@
           >
             {{ topic.progress }}%
           </span>
+          <!-- 内容层结束 -->
+          </div>
         </div>
       </div>
 
@@ -91,13 +119,74 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, inject } from 'vue'
 import { useRouter } from 'vue-router'
-import { Search, BookOpen, Sparkles } from 'lucide-vue-next'
+import { Search, BookOpen, Sparkles, Check, Trash2 } from 'lucide-vue-next'
 import { mockTopics } from '@/utils/mock'
 import type { StudyTopic } from '@/types/topic'
 
 const router = useRouter()
+
+// 获取全局 Toast（用于右滑标记提示）
+const showToast = inject<(msg: string, type?: string) => void>('toast')
+
+// ==================== 滑动手势跟踪 ====================
+
+/** 各列表项的滑动偏移量映射 */
+const swipeMaps = ref<Record<string, number>>({})
+
+/** 各列表项的触摸起始 X 坐标 */
+const swipeStartX = ref<Record<string, number>>({})
+
+/** 获取滑动值（确保为数字类型） */
+function swipeVal(id: string): number {
+  return Number(swipeMaps.value[id] || 0)
+}
+
+/**
+ * 滑动开始 - 记录起始位置
+ */
+function handleSwipeStart(id: string, e: TouchEvent) {
+  swipeStartX.value[id] = e.touches[0].clientX
+  swipeMaps.value[id] = 0
+}
+
+/**
+ * 滑动中 - 计算并限制偏移量
+ */
+function handleSwipeMove(id: string, e: TouchEvent) {
+  const diff = e.touches[0].clientX - (swipeStartX.value[id] || 0)
+  // 限制最大偏移范围，添加阻力
+  const clamped = Math.max(-120, Math.min(120, diff * 0.6))
+  swipeMaps.value[id] = clamped
+}
+
+/**
+ * 滑动结束 - 判断是否触发操作
+ */
+function handleSwipeEnd(id: string) {
+  const x = swipeMaps.value[id] || 0
+  if (x <= -80) {
+    // 左滑删除：从列表中移除该主题
+    const idx = allTopics.value.findIndex((t) => t.id === id)
+    if (idx !== -1) {
+      const topic = allTopics.value[idx]
+      const confirmed = window.confirm(`确定要删除「${topic.title}」这条学习路径吗？`)
+      if (confirmed) {
+        allTopics.value.splice(idx, 1)
+        // 同步到 localStorage
+        try {
+          localStorage.setItem('feiman_topics', JSON.stringify(allTopics.value))
+        } catch { /* 忽略 */ }
+      }
+    }
+  } else if (x >= 80) {
+    // 右滑标记完成
+    showToast?.('已标记为已完成', 'success')
+  }
+  // 弹回原位
+  swipeMaps.value[id] = 0
+}
 const searchQuery = ref('')
 
 // 优先从 localStorage 读取真实数据，无数据时使用 mock

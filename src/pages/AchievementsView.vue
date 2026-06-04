@@ -115,13 +115,69 @@
           </div>
         </div>
       </div>
+
+      <!-- ====== 功能17：我的学习曲线 ====== -->
+      <div class="bg-white rounded-2xl shadow-sm p-4 mt-4">
+        <h3 class="text-sm font-bold text-slate-700 mb-3 flex items-center gap-1.5">
+          <TrendingUp :size="15" class="text-emerald-500" /> 我的学习曲线
+        </h3>
+
+        <!-- 简易折线图（纯 SVG 实现） -->
+        <div class="relative h-32 w-full">
+          <svg viewBox="0 0 300 100" class="w-full h-full" preserveAspectRatio="none">
+            <!-- Y轴网格线 -->
+            <line x1="0" y1="25" x2="300" y2="25" stroke="#f1f5f9" stroke-width="0.5" />
+            <line x1="0" y1="50" x2="300" y2="50" stroke="#f1f5f9" stroke-width="0.5" />
+            <line x1="0" y1="75" x2="300" y2="75" stroke="#f1f5f9" stroke-width="0.5" />
+
+            <!-- 折线 -->
+            <polyline
+              :points="curvePoints"
+              fill="none"
+              stroke="#4F6EF7"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            />
+
+            <!-- 数据点 -->
+            <circle
+              v-for="(pt, idx) in curvePointsArray"
+              :key="idx"
+              :cx="pt.x"
+              :cy="pt.y"
+              r="3"
+              fill="#4F6EF7"
+            />
+
+            <!-- 渐变填充 -->
+            <polygon
+              :points="curveAreaPoints"
+              fill="url(#curveGradient)"
+              opacity="0.15"
+            />
+
+            <defs>
+              <linearGradient id="curveGradient" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stop-color="#4F6EF7" stop-opacity="0.5" />
+                <stop offset="100%" stop-color="#4F6EF7" stop-opacity="0" />
+              </linearGradient>
+            </defs>
+          </svg>
+
+          <!-- X轴标签 -->
+          <div class="flex justify-between mt-1">
+            <span v-for="label in curveLabels" :key="label" class="text-[9px] text-slate-400">{{ label }}</span>
+          </div>
+        </div>
+      </div>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
-import { CheckCircle, Clock, Lock, Share2 } from 'lucide-vue-next'
+import { CheckCircle, Clock, Lock, Share2, TrendingUp } from 'lucide-vue-next'
 import { useShare } from '@/composables/useShare'
 
 // 分享功能
@@ -329,4 +385,72 @@ async function handleShareBadge(badge: BadgeItem) {
 onMounted(() => {
   allBadges.value = checkAllAchievements()
 })
+
+// ==================== 功能17：学习曲线数据计算 ====================
+
+/** 最近 7 天的每日活跃度数据 */
+const curveData = computed(() => {
+  const data: Array<{ date: string; value: number }> = []
+  for (let i = 6; i >= 0; i--) {
+    const d = new Date(Date.now() - i * 86400000)
+    const dateStr = d.toISOString().slice(0, 10)
+    let value = 0
+
+    // 当天讲解最高分
+    try {
+      const sessions = JSON.parse(localStorage.getItem('feiman_sessions') || '[]')
+      const daySessions = sessions.filter((s: any) => s.createdAt?.startsWith(dateStr))
+      if (daySessions.length > 0) {
+        value = Math.max(...daySessions.map((s: any) => s.score || 0))
+      }
+    } catch { /* 解析失败时忽略 */ }
+
+    // 加上番茄钟加成（每个番茄 +5 分）
+    try {
+      const history = JSON.parse(localStorage.getItem('feiman_pomodoro_history') || '[]')
+      const p = history.find((h: any) => h.date === dateStr)
+      if (p) value += p.count * 5
+    } catch { /* 解析失败时忽略 */ }
+
+    data.push({ date: dateStr, value })
+  }
+  return data
+})
+
+/** SVG 折线 points 属性字符串 */
+const curvePoints = computed(() => {
+  if (curveData.value.length === 0) return ''
+  const maxVal = Math.max(...curveData.value.map(d => d.value), 10)
+  return curveData.value
+    .map((d, i) => {
+      const x = (i / (curveData.value.length - 1)) * 300
+      const y = 100 - (d.value / maxVal) * 90 - 5
+      return `${x},${y}`
+    })
+    .join(' ')
+})
+
+/** SVG 填充区域 points 字符串 */
+const curveAreaPoints = computed(() => {
+  if (curveData.value.length === 0) return ''
+  const pts = curvePoints.value.split(' ').map(p => p.split(','))
+  const area = [...pts, `300,100`, `0,100`]
+  return area.map((p: any) => p.join(',')).join(' ')
+})
+
+/** 数据点坐标数组（用于渲染 circle） */
+const curvePointsArray = computed(() =>
+  curvePoints.value.split(' ').map(p => {
+    const [x, y] = p.split(',')
+    return { x: parseFloat(x), y: parseFloat(y) }
+  })
+)
+
+/** X 轴日期标签 */
+const curveLabels = computed(() =>
+  curveData.value.map(d => {
+    const date = new Date(d.date + 'T00:00:00')
+    return `${date.getMonth() + 1}/${date.getDate()}`
+  })
+)
 </script>

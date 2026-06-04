@@ -76,7 +76,17 @@
       <!-- 编辑器区域 -->
       <div class="bg-white rounded-2xl p-5 shadow-sm">
         <label class="block text-sm font-semibold text-slate-700 mb-2.5">你的讲解</label>
+
+        <!-- Markdown 预览模式 -->
         <div
+          v-if="isPreviewMode"
+          class="min-h-[200px] prose prose-sm max-w-none p-4 text-sm text-slate-700 leading-relaxed markdown-preview"
+          v-html="renderedMarkdown"
+        />
+
+        <!-- 富文本编辑模式 -->
+        <div
+          v-else
           ref="editorRef"
           contenteditable="true"
           class="min-h-[140px] w-full p-3.5 rounded-xl border border-slate-200 text-sm text-slate-800 leading-relaxed focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 transition-all empty:before:content-[attr(data-placeholder)] empty:before:text-slate-400"
@@ -94,6 +104,14 @@
             :title="tool.label"
             @click="handleTool(tool.action)"
           >{{ tool.icon }}</button>
+          <!-- 编辑/预览切换按钮 -->
+          <button
+            class="ml-auto px-3 py-1.5 rounded-lg text-xs font-medium transition-colors"
+            :class="isPreviewMode ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-600'"
+            @click="isPreviewMode = !isPreviewMode"
+          >
+            {{ isPreviewMode ? '编辑' : '预览' }}
+          </button>
         </div>
       </div>
 
@@ -230,6 +248,9 @@ import { useRouter } from 'vue-router'
 import { MessageCircleQuestion, Share2 } from 'lucide-vue-next'
 import { optimizeExplanation, isAIReady, isAIEnabled } from '@/composables/useDeepSeek'
 import { useShare } from '@/composables/useShare'
+import { triggerHaptic } from '@/composables/useHaptic'
+import { generatePoster } from '@/composables/usePosterGenerator'
+import { useXPSystem } from '@/composables/useXPSystem'
 
 const router = useRouter()
 
@@ -239,12 +260,44 @@ const showToast = inject<(message: string, type?: 'success' | 'error' | 'info' |
 // 分享功能
 const { shareExplanation } = useShare()
 
+// XP 经验值系统
+const xpSystem = useXPSystem()
+
 const currentStep = ref(2)
 const totalSteps = ref(5)
 const stepLabels = ['选题', '讲解', '录音', '诊断', '复习']
 
 const editorRef = ref<HTMLDivElement>()
 const editorContent = ref('')
+
+// ====== Markdown 预览模式 ======
+const isPreviewMode = ref(false)
+
+/** 超简易 Markdown → HTML 渲染器（不引入外部库） */
+const renderedMarkdown = computed(() => {
+  let html = editorContent.value
+  // 标题
+  html = html.replace(/^#### (.+)$/gm, '<h4>$1</h4>')
+  html = html.replace(/^### (.+)$/gm, '<h3>$1</h3>')
+  html = html.replace(/^## (.+)$/gm, '<h2>$1</h2>')
+  html = html.replace(/^# (.+)$/gm, '<h1>$1</h1>')
+  // 粗体和斜体
+  html = html.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+  html = html.replace(/\*(.+?)\*/g, '<em>$1</em>')
+  // 行内代码
+  html = html.replace(/`(.+?)`/g, '<code class="px-1.5 py-0.5 bg-slate-100 rounded text-red-500 text-xs">$1</code>')
+  // 无序列表
+  html = html.replace(/^- (.+)$/gm, '<li>$1</li>')
+  html = html.replace(/(<li>.*<\/li>\n?)+/g, '<ul>$&</ul>')
+  // 有序列表
+  html = html.replace(/^\d+\. (.+)$/gm, '<li>$1</li>')
+  // 分隔线
+  html = html.replace(/^---$/gm, '<hr class="my-3 border-slate-200"/>')
+  // 段落
+  html = html.replace(/\n\n/g, '</p><p class="mb-2">')
+  html = '<p class="mb-2">' + html + '</p>'
+  return html
+})
 
 // ====== 主题选择器 ======
 const availableTopics = ['递归', '闭包', 'Promise', '前端工程化', '计算机网络', '高等数学', '数据结构', '操作系统']
@@ -560,6 +613,7 @@ async function handleSubmitScore() {
 
   // 始终使用本地评分，不需要 API
   scoreResult.value = localScore(editorContent.value, selectedTopic.value)
+  triggerHaptic('medium') // 评分提交触觉反馈
 
   isScoring.value = false
 }
@@ -571,14 +625,44 @@ function continueEditing() {
   editorRef.value?.focus()
 }
 
-// 分享讲解成果
+// 分享讲解成果（生成海报图片后分享/下载）
 async function handleShare() {
   if (!scoreResult.value) return
-  await shareExplanation({
-    topic: selectedTopic.value,
-    score: scoreResult.value.score,
-    summary: scoreResult.value.feedback,
-  })
+  showToast('正在生成海报...', 'info')
+  try {
+    const streakRaw = parseInt(localStorage.getItem('feiman_streak_days') || '0')
+    const posterUrl = await generatePoster({
+      topic: selectedTopic.value,
+      score: scoreResult.value.score,
+      summary: scoreResult.value.feedback,
+      date: new Date().toLocaleDateString('zh-CN'),
+      streakDays: streakRaw,
+    })
+
+    // 尝试使用 Web Share API 分享图片
+    if (navigator.share && (navigator as any).canShare) {
+      try {
+        const response = await fetch(posterUrl)
+        const blob = await response.blob()
+        const file = new File([blob], 'feiman-poster.png', { type: 'image/png' })
+
+        await navigator.share({
+          title: `我在「${selectedTopic.value}」讲解中获得 ${scoreResult.value.score} 分`,
+          files: [file],
+        })
+        return
+      } catch { /* 降级到下载 */ }
+    }
+
+    // 降级方案：直接下载图片
+    const a = document.createElement('a')
+    a.href = posterUrl
+    a.download = `feiman-${selectedTopic.value}-${scoreResult.value.score}分.png`
+    a.click()
+    showToast('海报已保存到下载目录', 'success')
+  } catch (_err) {
+    showToast('海报生成失败', 'error')
+  }
 }
 
 // 键盘快捷键
@@ -604,6 +688,32 @@ function handleKeyboard(e: KeyboardEvent) {
   }
 }
 
+/**
+ * 保存讲解后更新连续打卡状态
+ * 确保每次完成讲解后都刷新打卡记录
+ */
+function updateStreakOnSessionSave(): void {
+  const today = new Date().toISOString().slice(0, 10)
+  const lastActive = localStorage.getItem('feiman_last_active_date')
+  let streak = parseInt(localStorage.getItem('feiman_streak_days') || '0')
+
+  if (lastActive !== today) {
+    // 今天还没记录过
+    const yesterday = new Date(Date.now() - 86400000).toISOString().slice(0, 10)
+
+    if (lastActive === yesterday) {
+      streak++
+    } else if (lastActive !== null && lastActive !== yesterday) {
+      streak = 1
+    } else {
+      streak = 1
+    }
+
+    localStorage.setItem('feiman_streak_days', String(streak))
+    localStorage.setItem('feiman_last_active_date', today)
+  }
+}
+
 function saveSession() {
   // 保存到 localStorage
   try {
@@ -618,6 +728,22 @@ function saveSession() {
     })
     localStorage.setItem('feiman_sessions', JSON.stringify(sessions))
     showToast('讲解已保存！可在「讲解记录」中查看。', 'success')
+    triggerHaptic('success') // 保存成功触觉反馈
+
+    // 更新连续打卡状态
+    updateStreakOnSessionSave()
+
+    // ====== 功能15：获得 XP 经验值 ======
+    const prevLevel = xpSystem.getState().level
+    const xpResult = xpSystem.gainXP('explain_session')
+    // 满分额外奖励
+    if (scoreResult.value && scoreResult.value.score >= 90) {
+      xpSystem.gainXP('perfect_score')
+    }
+    // 升级提示
+    if (xpResult.level > prevLevel) {
+      showToast(`🎉 升级了！当前 Lv.${xpResult.level}`, 'success')
+    }
   } catch {
     showToast('保存失败，请重试', 'error')
   }
@@ -632,4 +758,14 @@ function saveSession() {
 .animate-fade-up {
   animation: fade-up 0.35s ease-out both;
 }
+
+/* Markdown 预览样式 */
+.markdown-preview h1 { font-size: 1.25rem; font-weight: 700; margin-bottom: 0.5rem; color: #1e293b; }
+.markdown-preview h2 { font-size: 1.1rem; font-weight: 600; margin-bottom: 0.4rem; color: #334155; }
+.markdown-preview h3 { font-size: 1rem; font-weight: 600; margin-bottom: 0.3rem; }
+.markdown-preview h4 { font-size: 0.9rem; font-weight: 600; margin-bottom: 0.3rem; }
+.markdown-preview ul { padding-left: 1.2rem; margin: 0.5rem 0; list-style-type: disc; }
+.markdown-preview li { margin: 0.15rem 0; }
+.markdown-preview hr { border: none; }
+.markdown-preview code { font-family: ui-monospace, monospace; }
 </style>

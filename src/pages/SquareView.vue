@@ -8,7 +8,7 @@
       </div>
 
       <!-- 筛选 tabs -->
-      <div class="flex gap-2 bg-white rounded-xl p-1 shadow-sm">
+      <div class="flex gap-2 bg-white dark:bg-slate-800 rounded-xl p-1 shadow-sm">
         <button
           v-for="tab in filterTabs"
           :key="tab.key"
@@ -31,7 +31,7 @@
         >
           <!-- 卡片头部：标题 + 一键学习按钮 -->
           <div class="flex items-start justify-between mb-3">
-            <h3 class="text-base font-semibold text-slate-900 leading-snug flex-1 pr-3">{{ example.title }}</h3>
+            <h3 class="text-base font-semibold text-slate-900 dark:text-slate-100 leading-snug flex-1 pr-3">{{ example.title }}</h3>
             <button
               class="shrink-0 px-3 py-1.5 rounded-full bg-blue-50 text-[#4F6EF7] text-xs font-semibold active:bg-blue-100 transition-colors whitespace-nowrap"
               @click.stop="handleLearn(example)"

@@ -295,12 +295,15 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, reactive, onMounted, inject } from 'vue'
+import { ref, computed, reactive, onMounted, inject, onUnmounted } from 'vue'
 import { mockCards } from '@/utils/mock'
 import { updateSM2, type SM2Params } from '@/composables/useSpacedRepetition'
 import type { ReviewCard } from '@/types/card'
 import { Check, Upload, ChevronLeft, ChevronRight, Plus } from 'lucide-vue-next'
 import { usePullRefresh } from '@/composables/usePullRefresh'
+import { useUndoRedo } from '@/composables/useUndoRedo'
+import { triggerHaptic } from '@/composables/useHaptic'
+import { useXPSystem } from '@/composables/useXPSystem'
 
 // 下拉刷新
 const refreshContainerRef = ref<HTMLElement>()
@@ -313,6 +316,9 @@ const { isPulling, isRefreshing, pullDistance, init } = usePullRefresh({
 
 // 注入全局 Toast
 const showToast = inject<(message: string, type?: 'success' | 'error' | 'info' | 'warning', duration?: number) => void>('toast')!
+
+// XP 经验值系统
+const xpSystem = useXPSystem()
 
 // ====== 模式状态 ======
 type Mode = 'select' | 'review'
@@ -437,6 +443,33 @@ interface CardGroup {
 
 // 所有卡片（mock + 用户上传的）
 const allCards = ref<ReviewCard[]>([...mockCards])
+
+// ==================== 全局撤销/重做（功能2） ====================
+
+const { undo, redo, canUndo, canRedo, execute } = useUndoRedo(allCards.value)
+
+/**
+ * 全局键盘快捷键：Ctrl+Z 撤销，Ctrl+Y/Ctrl+Shift+Z 重做
+ */
+function handleGlobalKeydown(e: KeyboardEvent): void {
+  if ((e.ctrlKey || e.metaKey) && e.key === 'z' && !e.shiftKey) {
+    e.preventDefault()
+    if (undo()) {
+      // 撤销后从 localStorage 恢复数据
+      const restored = JSON.parse(localStorage.getItem('feiman_cards') || '[]')
+      if (restored.length > 0) {
+        const storedIds = new Set(restored.map((c: any) => c.id))
+        const remainingMock = mockCards.filter((c: ReviewCard) => !storedIds.has(c.id))
+        allCards.value = [...restored, ...remainingMock]
+      }
+      showToast('已撤销删除操作', 'info')
+    }
+  }
+  if ((e.ctrlKey || e.metaKey) && (e.key === 'y' || (e.key === 'z' && e.shiftKey))) {
+    e.preventDefault()
+    redo()
+  }
+}
 
 // 按主题分组
 const cardGroups = computed<CardGroup[]>(() => {
@@ -585,11 +618,13 @@ const progressPercent = computed(() =>
 )
 
 function flipCard() {
+  triggerHaptic('light') // 翻卡触觉反馈
   isFlipping.value = true
   setTimeout(() => { showAnswer.value = true }, 150)
 }
 
 function rateCard(quality: 'forget' | 'hard' | 'easy') {
+  triggerHaptic('medium') // 评级触觉反馈
   const qualityMap: Record<string, number> = { forget: 1, hard: 3, easy: 5 }
   const q = qualityMap[quality]
 
@@ -613,6 +648,8 @@ function rateCard(quality: 'forget' | 'hard' | 'easy') {
   }
 
   reviewedCount.value++
+  // ====== 功能15：复习闪卡获得 XP ======
+  xpSystem.gainXP('flashcard_review')
   nextCard()
 }
 
@@ -659,12 +696,19 @@ function loadCardsFromStorage() {
   }
 }
 
-// 初始化加载错题本 + 下拉刷新绑定
+// 初始化加载错题本 + 下拉刷新绑定 + 撤销/重做快捷键
 onMounted(() => {
   loadWrongBook()
   if (refreshContainerRef.value) {
     init(refreshContainerRef.value)
   }
+  // 注册撤销/重做全局快捷键
+  window.addEventListener('keydown', handleGlobalKeydown)
+})
+
+onUnmounted(() => {
+  // 清理撤销/重做快捷键监听
+  window.removeEventListener('keydown', handleGlobalKeydown)
 })
 </script>
 

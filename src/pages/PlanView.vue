@@ -1,9 +1,9 @@
 <template>
-  <div class="min-h-screen bg-slate-50 pb-24">
+  <div class="min-h-screen bg-slate-50 dark:bg-slate-900 pb-24">
     <div class="max-w-md mx-auto px-5 pt-6 space-y-5">
       <!-- 顶部标题 -->
       <div>
-        <h1 class="text-xl font-bold text-slate-900">今日计划</h1>
+        <h1 class="text-xl font-bold text-slate-900 dark:text-slate-100">今日计划</h1>
         <p class="text-sm text-slate-500 mt-0.5">AI 按优先级安排学习任务</p>
       </div>
 
@@ -15,22 +15,98 @@
         @mode-change="onModeChange"
       />
 
+      <!-- 专注统计卡片 -->
+      <div class="bg-white rounded-2xl shadow-sm p-4 mt-3">
+        <div class="flex items-center justify-between mb-3">
+          <h3 class="text-sm font-semibold text-slate-700 flex items-center gap-1.5">
+            <BarChart3 :size="15" class="text-orange-500" /> 专注统计
+          </h3>
+          <span class="text-[11px] text-slate-400">本周 {{ weekTotalMinutes }} 分钟</span>
+        </div>
+
+        <!-- 统计网格 -->
+        <div class="grid grid-cols-3 gap-3 mb-3">
+          <div class="text-center bg-orange-50 rounded-xl py-2.5">
+            <p class="text-xl font-bold text-orange-600">{{ todayCount }}</p>
+            <p class="text-[10px] text-slate-500">今日番茄</p>
+          </div>
+          <div class="text-center bg-blue-50 rounded-xl py-2.5">
+            <p class="text-xl font-bold text-blue-600">{{ todayMinutes }}</p>
+            <p class="text-[10px] text-slate-500">今日分钟</p>
+          </div>
+          <div class="text-center bg-emerald-50 rounded-xl py-2.5">
+            <p class="text-xl font-bold text-emerald-600">{{ bestDayCount }}</p>
+            <p class="text-[10px] text-slate-500">最佳单日</p>
+          </div>
+        </div>
+
+        <!-- 本周柱状图（纯CSS实现） -->
+        <div class="flex items-end justify-between gap-1 h-16 px-1">
+          <div
+            v-for="(day, idx) in weekData"
+            :key="idx"
+            class="flex-1 flex flex-col items-center gap-1"
+          >
+            <span class="text-[9px] font-medium text-slate-400">{{ day.count }}</span>
+            <div
+              class="w-full rounded-t-md transition-all min-h-[4px]"
+              :class="day.isToday ? 'bg-orange-500' : 'bg-orange-200'"
+              :style="{ height: Math.max(4, (day.count / maxWeekCount) * 48) + 'px' }"
+            />
+            <span class="text-[9px]" :class="day.isToday ? 'text-orange-500 font-bold' : 'text-slate-400'">{{ day.label }}</span>
+          </div>
+        </div>
+      </div>
+
       <!-- 今日学习摘要卡片 -->
       <div class="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-2xl p-4 border border-blue-100">
         <div class="flex items-center justify-between mb-3">
           <h3 class="text-sm font-semibold text-slate-700">今日学习摘要</h3>
           <span class="text-xs text-blue-500">{{ todayDate }}</span>
         </div>
+
+        <!-- 每日目标设定 -->
+        <div class="flex items-center gap-2 mb-3 pb-2 border-b border-blue-100">
+          <Target :size="14" class="text-blue-500 shrink-0" />
+          <span class="text-xs font-medium text-slate-600">今日目标</span>
+          <input
+            v-model.number="dailyGoalSessions"
+            type="number"
+            min="0"
+            max="20"
+            class="w-12 px-1.5 py-0.5 text-xs text-center border border-blue-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-400 text-blue-600 font-semibold"
+            @change="saveDailyGoal"
+          />
+          <span class="text-xs text-slate-400">次讲解 ·</span>
+          <input
+            v-model.number="dailyGoalCards"
+            type="number"
+            min="0"
+            max="100"
+            class="w-12 px-1.5 py-0.5 text-xs text-center border border-blue-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-400 text-blue-600 font-semibold"
+            @change="saveDailyGoal"
+          />
+          <span class="text-xs text-slate-400">张闪卡</span>
+        </div>
+
         <div class="grid grid-cols-4 gap-2">
           <!-- 讲解次数 -->
-          <div class="bg-white rounded-xl p-2.5 text-center shadow-sm">
+          <div class="bg-white dark:bg-slate-800 rounded-xl p-2.5 text-center shadow-sm">
             <p class="text-lg font-bold text-[#4F6EF7]">{{ todayStats.explainCount }}</p>
             <p class="text-[10px] text-slate-400 mt-0.5 leading-tight">讲解次数</p>
+            <!-- 目标进度 -->
+            <div v-if="dailyGoalSessions > 0" class="mt-1 w-full h-1 bg-slate-100 rounded-full overflow-hidden">
+              <div class="h-full rounded-full transition-all" :class="todayStats.explainCount >= dailyGoalSessions ? 'bg-emerald-500' : 'bg-blue-500'" :style="{ width: Math.min(100, (todayStats.explainCount / dailyGoalSessions) * 100) + '%' }" />
+            </div>
           </div>
           <!-- 复习卡数 -->
           <div class="bg-white rounded-xl p-2.5 text-center shadow-sm">
             <p class="text-lg font-bold text-emerald-500">{{ todayStats.reviewCards }}</p>
             <p class="text-[10px] text-slate-400 mt-0.5 leading-tight">复习卡数</p>
+            <!-- 目标进度 -->
+            <div v-if="dailyGoalCards > 0" class="mt-1 w-full h-1 bg-slate-100 rounded-full overflow-hidden">
+              <div class="h-full rounded-full transition-all" :class="todayStats.reviewCards >= dailyGoalCards ? 'bg-emerald-500' : 'bg-emerald-400'" :style="{ width: Math.min(100, (todayStats.reviewCards / dailyGoalCards) * 100) + '%' }" />
+            </div>
           </div>
           <!-- 专注时长 -->
           <div class="bg-white rounded-xl p-2.5 text-center shadow-sm">
@@ -38,7 +114,7 @@
             <p class="text-[10px] text-slate-400 mt-0.5 leading-tight">专注时长</p>
           </div>
           <!-- 连续天数 -->
-          <div class="bg-white rounded-xl p-2.5 text-center shadow-sm">
+          <div class="bg-white dark:bg-slate-800 rounded-xl p-2.5 text-center shadow-sm">
             <p class="text-lg font-bold text-purple-500">{{ todayStats.streakDays }}</p>
             <p class="text-[10px] text-slate-400 mt-0.5 leading-tight">连续天数</p>
           </div>
@@ -83,8 +159,8 @@
             {{ task.time }}
           </span>
           <!-- 任务卡片 -->
-          <div class="flex-1 bg-white rounded-2xl shadow-sm p-4 border-l-4" :class="taskBorderColor(task)">
-            <p class="text-sm font-bold text-slate-900 leading-snug">{{ task.title }}</p>
+          <div class="flex-1 bg-white dark:bg-slate-800 rounded-2xl shadow-sm p-4 border-l-4" :class="taskBorderColor(task)">
+            <p class="text-sm font-bold text-slate-900 dark:text-slate-100 leading-snug">{{ task.title }}</p>
             <p class="text-xs mt-1 font-medium" :class="taskTagColor(task)">
               {{ taskTagText(task) }}
               <span v-if="task.pomodoroStarted" class="ml-1.5 text-indigo-500">· 已开始</span>
@@ -105,10 +181,15 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, type Ref } from 'vue'
+import { ref, computed, watch, type Ref } from 'vue'
+import { BarChart3 } from 'lucide-vue-next'
 import { mockDailyPlans } from '@/utils/mock'
 import type { PlanTask } from '@/types/plan'
+import { Target } from 'lucide-vue-next'
 import PomodoroTimer from '@/components/common/PomodoroTimer.vue'
+import { useToast } from '@/composables/useToast'
+
+const { showToast } = useToast()
 
 const weekDays = ['一', '二', '三', '四', '五', '六', '日']
 const weekDates = [1, 2, 3, 4, 5, 6, 7]
@@ -116,6 +197,66 @@ const selectedDayIndex: Ref<number> = ref(3) // 周四
 
 // 番茄钟时长（分钟）
 const pomodoroDuration = ref(25)
+
+// ====== 每日学习目标 ======
+
+/** 每日讲解目标次数 */
+const dailyGoalSessions = ref<number>(3)
+/** 每日闪卡目标数量 */
+const dailyGoalCards = ref<number>(10)
+/** 是否已提示目标完成（避免重复弹窗） */
+const goalNotified = ref<Record<string, boolean>>({})
+
+/**
+ * 从 localStorage 加载每日目标设置
+ */
+function loadDailyGoal(): void {
+  try {
+    const data = localStorage.getItem('feiman_daily_goal')
+    if (data) {
+      const goal = JSON.parse(data)
+      dailyGoalSessions.value = goal.sessions ?? 3
+      dailyGoalCards.value = goal.cards ?? 10
+    }
+  } catch {
+    // 使用默认值
+  }
+}
+
+// 初始化加载目标
+loadDailyGoal()
+
+/**
+ * 保存每日目标到 localStorage
+ */
+function saveDailyGoal(): void {
+  const goal = {
+    sessions: dailyGoalSessions.value,
+    cards: dailyGoalCards.value
+  }
+  localStorage.setItem('feiman_daily_goal', JSON.stringify(goal))
+  showToast('每日目标已更新', 'success')
+}
+
+/**
+ * 监听今日统计数据变化，检测是否达成目标并弹出提示
+ */
+watch(
+  () => todayStats.value,
+  (stats) => {
+    // 检测讲解次数目标
+    if (dailyGoalSessions.value > 0 && stats.explainCount >= dailyGoalSessions.value && !goalNotified.value.sessions) {
+      goalNotified.value.sessions = true
+      showToast('🎉 今日讲解目标已完成！', 'success')
+    }
+    // 检测闪卡复习目标
+    if (dailyGoalCards.value > 0 && stats.reviewCards >= dailyGoalCards.value && !goalNotified.value.cards) {
+      goalNotified.value.cards = true
+      showToast('🎉 今日闪卡复习目标已完成！', 'success')
+    }
+  },
+  { immediate: true, deep: true }
+)
 
 function isSelectedDay(i: number): boolean {
   return i === selectedDayIndex.value
@@ -156,9 +297,12 @@ function taskTagText(task: PlanTask): string {
 
 // ====== 番茄钟事件处理 ======
 
-/** 番茄钟完成时，标记当前任务已开始 */
+/** 番茄钟完成时，标记当前任务已开始 + 记录统计 */
 function onPomodoroComplete(data: { mode: string; duration: number }): void {
   if (data.mode === 'work') {
+    // 记录番茄钟完成到历史
+    recordPomodoroComplete()
+
     // 找到当前时间最接近的未完成任务并标记开始
     const now = new Date()
     const currentHour = now.getHours()
@@ -185,6 +329,105 @@ function onModeChange(mode: string): void {
   // 可用于记录模式切换日志等
   console.log(`番茄钟切换到模式: ${mode}`)
 }
+
+// ====== 番茄钟历史统计 ======
+
+/** 番茄钟历史记录类型 */
+interface PomodoroRecord {
+  date: string   // YYYY-MM-DD
+  count: number  // 当天完成的番茄数
+  minutes: number // 总分钟数
+}
+
+/**
+ * 获取番茄钟历史记录（从 localStorage）
+ * @returns 历史记录数组
+ */
+function getPomodoroHistory(): PomodoroRecord[] {
+  try {
+    const raw = localStorage.getItem('feiman_pomodoro_history')
+    return raw ? JSON.parse(raw) : []
+  } catch {
+    return []
+  }
+}
+
+/**
+ * 记录一次番茄钟完成到 localStorage
+ */
+function recordPomodoroComplete(): void {
+  const today = new Date().toISOString().slice(0, 10)
+  const history = getPomodoroHistory()
+  const todayRecord = history.find((r: PomodoroRecord) => r.date === today)
+  if (todayRecord) {
+    todayRecord.count++
+    todayRecord.minutes += pomodoroDuration.value
+  } else {
+    history.push({ date: today, count: 1, minutes: pomodoroDuration.value })
+  }
+  // 只保留最近90天
+  const cutoff = new Date(Date.now() - 90 * 86400000).toISOString().slice(0, 10)
+  const filtered = history.filter((r: PomodoroRecord) => r.date >= cutoff)
+  localStorage.setItem('feiman_pomodoro_history', JSON.stringify(filtered))
+}
+
+/** 今日日期字符串 YYYY-MM-DD */
+const todayStr = new Date().toISOString().slice(0, 10)
+
+/** 今日完成的番茄数 */
+const todayCount = computed((): number => {
+  const r = getPomodoroHistory().find((d: PomodoroRecord) => d.date === todayStr)
+  return r?.count || 0
+})
+
+/** 今日专注分钟数 */
+const todayMinutes = computed((): number => {
+  const r = getPomodoroHistory().find((d: PomodoroRecord) => d.date === todayStr)
+  return r?.minutes || 0
+})
+
+/** 本周总专注分钟数 */
+const weekTotalMinutes = computed((): number => {
+  const now = new Date()
+  const monday = new Date(now)
+  monday.setDate(now.getDate() - ((now.getDay() + 6) % 7))
+  const mondayStr = monday.toISOString().slice(0, 10)
+  return getPomodoroHistory()
+    .filter((r: PomodoroRecord) => r.date >= mondayStr)
+    .reduce((sum: number, r: PomodoroRecord) => sum + r.minutes, 0)
+})
+
+/** 最佳单日番茄数 */
+const bestDayCount = computed((): number => {
+  const history = getPomodoroHistory()
+  return history.length > 0 ? Math.max(...history.map((r: PomodoroRecord) => r.count)) : 0
+})
+
+/** 本周每日数据（用于柱状图） */
+interface WeekDayData {
+  label: string
+  count: number
+  isToday: boolean
+}
+
+const weekData = computed((): WeekDayData[] => {
+  const days = ['一', '二', '三', '四', '五', '六', '日']
+  const now = new Date()
+  return days.map((label, i): WeekDayData => {
+    const d = new Date(now)
+    d.setDate(now.getDate() - ((now.getDay() + 6) % 7) + i)
+    const dateStr = d.toISOString().slice(0, 10)
+    const record = getPomodoroHistory().find((r: PomodoroRecord) => r.date === dateStr)
+    return {
+      label,
+      count: record?.count || 0,
+      isToday: dateStr === todayStr,
+    }
+  })
+})
+
+/** 本周最大番茄数（用于柱状图归一化） */
+const maxWeekCount = computed(() => Math.max(...weekData.value.map(d => d.count), 1))
 
 // ==================== 今日学习摘要 ====================
 

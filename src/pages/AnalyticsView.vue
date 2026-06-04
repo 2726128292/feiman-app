@@ -51,6 +51,65 @@
           </div>
         </div>
 
+        <!-- 学习报告卡片（周报/月报） -->
+        <div class="bg-gradient-to-br from-indigo-50 via-purple-50 to-pink-50 rounded-2xl p-4 border border-indigo-100">
+          <div class="flex items-center justify-between mb-3">
+            <h3 class="text-sm font-bold text-slate-800 flex items-center gap-1.5">
+              <FileText :size="15" class="text-indigo-500" /> 学习周报
+            </h3>
+            <select
+              v-model="reportPeriod"
+              class="text-xs border-0 bg-white/70 rounded-lg px-2 py-1 text-slate-600 focus:ring-1 focus:ring-indigo-400"
+            >
+              <option value="week">本周</option>
+              <option value="month">本月</option>
+            </select>
+          </div>
+
+          <!-- 报告内容 -->
+          <div class="space-y-3">
+            <!-- 总结段落 -->
+            <p class="text-xs text-slate-600 leading-relaxed">
+              {{ reportSummary }}
+            </p>
+
+            <!-- 关键数据 2x2 网格 -->
+            <div class="grid grid-cols-2 gap-2">
+              <div class="bg-white/60 rounded-xl p-2.5 text-center">
+                <p class="text-lg font-bold text-indigo-600">{{ reportData.totalSessions }}</p>
+                <p class="text-[10px] text-slate-500">次讲解</p>
+              </div>
+              <div class="bg-white/60 rounded-xl p-2.5 text-center">
+                <p class="text-lg font-bold text-emerald-600">{{ reportData.avgScore }}</p>
+                <p class="text-[10px] text-slate-500">平均分</p>
+              </div>
+              <div class="bg-white/60 rounded-xl p-2.5 text-center">
+                <p class="text-lg font-bold text-blue-600">{{ reportData.cardsReviewed }}</p>
+                <p class="text-[10px] text-slate-500">张闪卡</p>
+              </div>
+              <div class="bg-white/60 rounded-xl p-2.5 text-center">
+                <p class="text-lg font-bold text-orange-600">{{ reportData.activeDays }}</p>
+                <p class="text-[10px] text-slate-500">天活跃</p>
+              </div>
+            </div>
+
+            <!-- 建议 -->
+            <div class="bg-white/60 rounded-xl p-2.5">
+              <p class="text-[11px] text-slate-500 leading-relaxed">
+                💡 <span class="font-medium text-slate-600">建议：</span>{{ reportSuggestion }}
+              </p>
+            </div>
+
+            <!-- 导出报告按钮 -->
+            <button
+              class="mt-2 px-3 py-1.5 rounded-lg bg-white/70 text-xs font-medium text-indigo-600 hover:bg-white transition-colors flex items-center gap-1 self-end"
+              @click="handleExportPdf"
+            >
+              <DownloadIcon :size="13" /> 导出报告
+            </button>
+          </div>
+        </div>
+
         <!-- 热力日历 -->
         <div class="bg-white rounded-2xl shadow-sm p-4">
           <h2 class="text-base font-bold text-slate-800 mb-4">热力日历</h2>
@@ -71,9 +130,10 @@
                 <div
                   v-for="(cell, cellIdx) in week.cells"
                   :key="cellIdx"
-                  class="w-full aspect-square rounded-sm cursor-default"
+                  class="w-full aspect-square rounded-sm cursor-pointer hover:ring-1 hover:ring-blue-300 transition-all"
                   :class="cell.color"
                   :title="cell.date ? `${cell.date} · ${cell.count} 次活动` : ''"
+                  @click="cell.date && selectDate(cell.date)"
                 />
               </div>
             </div>
@@ -89,6 +149,34 @@
             <span class="text-[10px] text-slate-400">多</span>
           </div>
         </div>
+
+        <!-- ====== 功能16：日期详情面板 ====== -->
+        <Transition name="fade">
+          <div v-if="selectedDate" class="mt-3 bg-white rounded-xl p-4 shadow-sm">
+            <div class="flex items-center justify-between mb-3">
+              <h4 class="text-sm font-bold text-slate-700">{{ selectedDateDetail.date }}</h4>
+              <button class="text-slate-400 hover:text-slate-600" @click="selectedDate = null">
+                <X :size="16" />
+              </button>
+            </div>
+            <div v-if="selectedDateDetail.activities.length > 0" class="space-y-2">
+              <div
+                v-for="(act, idx) in selectedDateDetail.activities"
+                :key="idx"
+                class="flex items-center gap-3 py-2 px-3 rounded-lg bg-slate-50"
+              >
+                <div class="w-8 h-8 rounded-lg flex items-center justify-center shrink-0" :class="act.iconBg">
+                  <component :is="act.icon" :size="14" :class="act.iconColor" />
+                </div>
+                <div class="flex-1 min-w-0">
+                  <p class="text-xs font-medium text-slate-700">{{ act.title }}</p>
+                  <p class="text-[11px] text-slate-400">{{ act.detail }}</p>
+                </div>
+              </div>
+            </div>
+            <div v-else class="py-6 text-center text-sm text-slate-400">当天无学习记录</div>
+          </div>
+        </Transition>
 
         <!-- 本月建议 -->
         <div class="bg-white rounded-2xl shadow-sm p-4">
@@ -110,9 +198,10 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
-import { TrendingUp, TrendingDown, Lightbulb } from 'lucide-vue-next'
+import { computed, ref } from 'vue'
+import { TrendingUp, TrendingDown, Lightbulb, FileText, Download as DownloadIcon, X, Mic, Timer } from 'lucide-vue-next'
 import type { UserProfile, StudyTopic, FeynmanSession, ReviewCard, Achievement } from '@/types'
+import { exportPdfReport } from '@/composables/usePdfExport'
 
 // ====== 类型定义 ======
 interface WrongBookItem {
@@ -478,4 +567,149 @@ const suggestionText = computed(() => {
 
   return suggestions[0]
 })
+
+// ==================== 学习周报/月报数据 ====================
+
+/** 报告周期：本周 或 本月 */
+const reportPeriod = ref<'week' | 'month'>('week')
+
+/** 报告关键数据 */
+const reportData = computed(() => {
+  const now = new Date()
+  const daysAgo = reportPeriod.value === 'week' ? 7 : 30
+  const cutoff = new Date(Date.now() - daysAgo * 86400000)
+  const cutoffISO = cutoff.toISOString()
+
+  // 讲解次数与总分
+  let totalSessions = 0
+  let totalScore = 0
+  try {
+    const sessionData = JSON.parse(localStorage.getItem('feiman_sessions') || '[]')
+    const recent = sessionData.filter((s: any) => s.createdAt >= cutoffISO)
+    totalSessions = recent.length
+    totalScore = recent.reduce((sum: number, s: any) => sum + (s.score || 0), 0)
+  } catch { /* 静默 */ }
+
+  // 闪卡复习数（从 daily_stats 获取累计值）
+  let cardsReviewed = 0
+  try {
+    const stats = JSON.parse(localStorage.getItem('feiman_daily_stats') || '{}')
+    cardsReviewed = stats.reviewCount || 0
+  } catch { /* 静默 */ }
+
+  // 活跃天数（基于 session 的日期去重）
+  let activeDays = 0
+  try {
+    const sessionData = JSON.parse(localStorage.getItem('feiman_sessions') || '[]')
+    const dates = new Set(
+      sessionData
+        .filter((s: any) => s.createdAt >= cutoffISO)
+        .map((s: any) => s.createdAt?.slice(0, 10))
+        .filter(Boolean)
+    )
+    activeDays = dates.size
+  } catch { /* 静默 */ }
+
+  return {
+    totalSessions,
+    avgScore: totalSessions > 0 ? Math.round(totalScore / totalSessions) : 0,
+    cardsReviewed,
+    activeDays,
+  }
+})
+
+/** 报告总结段落 */
+const reportSummary = computed(() => {
+  const d = reportData.value
+  const period = reportPeriod.value === 'week' ? '本周' : '本月'
+  if (d.totalSessions === 0) {
+    return `${period}还没有学习记录哦。开始第一次费曼讲解吧！把知识讲明白，才是真的学会。`
+  }
+  return `${period}你完成了 ${d.totalSessions} 次费曼讲解，平均得分 ${d.avgScore} 分，${d.activeDays} 天保持了学习习惯。${d.avgScore >= 80 ? '表现非常出色！继续保持！' : d.avgScore >= 60 ? '稳步提升中，加油！' : '还有提升空间，多练习讲解会更好。'}`
+})
+
+/** 报告建议文案 */
+const reportSuggestion = computed(() => {
+  const d = reportData.value
+  if (d.totalSessions === 0) return '每天花 10 分钟做一次费曼讲解，效果会非常显著。'
+  if (d.avgScore < 70) return '尝试用更多类比和生活化的例子来讲解，会让内容更容易理解。'
+  if (d.cardsReviewed < 5) return '定期复习闪卡可以帮助巩固记忆，建议每天复习 10 张以上。'
+  if (d.activeDays < 3) return '保持每天学习的习惯，哪怕只有 5 分钟也会有很大进步。'
+  return '你做得很好！可以尝试挑战更高难度的主题，或把你的讲解分享给他人。'
+})
+
+// ====== PDF 报告导出 ======
+
+/** 导出学习报告为 PDF（通过打印对话框） */
+function handleExportPdf(): void {
+  const periodLabel = reportPeriod.value === 'week' ? '本周' : '本月'
+  exportPdfReport({
+    title: '学习报告',
+    period: periodLabel,
+    sections: [
+      { label: '讲解次数', value: String(reportData.value.totalSessions) },
+      { label: '平均分数', value: String(reportData.value.avgScore) + '分' },
+      { label: '闪卡复习', value: String(reportData.value.cardsReviewed) + '张' },
+      { label: '活跃天数', value: String(reportData.value.activeDays) + '天' },
+    ],
+    summary: reportSummary.value,
+    suggestion: reportSuggestion.value,
+    generatedAt: new Date().toLocaleDateString('zh-CN'),
+  })
+}
+
+// ==================== 功能16：日期详情选择逻辑 ====================
+
+/** 当前选中的日期（YYYY-MM-DD 格式） */
+const selectedDate = ref<string | null>(null)
+
+/** 选中日期的详情数据 */
+const selectedDateDetail = ref<{ date: string; activities: Array<{ icon: any; iconBg: string; iconColor: string; title: string; detail: string }> }>({ date: '', activities: [] })
+
+/**
+ * 选择某个日期，查询当天所有学习活动
+ * @param dateStr YYYY-MM-DD 格式的日期字符串
+ */
+function selectDate(dateStr: string): void {
+  selectedDate.value = dateStr
+  const activities: Array<{ icon: any; iconBg: string; iconColor: string; title: string; detail: string }> = []
+
+  // 查找当天的讲解记录
+  try {
+    const sessions = JSON.parse(localStorage.getItem('feiman_sessions') || '[]')
+    const daySessions = sessions.filter((s: any) => s.createdAt?.startsWith(dateStr))
+    daySessions.forEach((s: any) => {
+      activities.push({
+        icon: Mic,
+        iconBg: 'bg-purple-50',
+        iconColor: 'text-purple-500',
+        title: `费曼讲解`,
+        detail: `${s.topicId || '未知主题'} · ${s.score || '?'}分`,
+      })
+    })
+  } catch { /* 解析失败时忽略 */ }
+
+  // 查找当天的番茄钟记录
+  try {
+    const history = JSON.parse(localStorage.getItem('feiman_pomodoro_history') || '[]')
+    const dayPomodoro = history.find((h: any) => h.date === dateStr)
+    if (dayPomodoro) {
+      activities.push({
+        icon: Timer,
+        iconBg: 'bg-orange-50',
+        iconColor: 'text-orange-500',
+        title: '专注学习',
+        detail: `${dayPomodoro.count} 个番茄 · ${dayPomodoro.minutes} 分钟`,
+      })
+    }
+  } catch { /* 解析失败时忽略 */ }
+
+  selectedDateDetail.value = { date: formatDateShort(dateStr), activities }
+}
+
+/** 将 YYYY-MM-DD 格式化为 "M月D日" 显示格式 */
+function formatDateShort(dateStr: string): string {
+  const d = new Date(dateStr + 'T00:00:00')
+  return `${d.getMonth() + 1}月${d.getDate()}日`
+}
 </script>

@@ -1,5 +1,5 @@
 <template>
-  <div ref="refreshContainer" class="min-h-screen bg-slate-50 pb-24">
+  <div ref="refreshContainer" class="min-h-screen bg-slate-50 dark:bg-slate-900 pb-24">
     <div class="max-w-md mx-auto px-5 pt-6 space-y-4">
       <!-- 下拉刷新指示器 -->
       <div
@@ -16,7 +16,7 @@
 
       <!-- 顶部标题区 -->
       <div>
-        <h1 class="text-2xl font-bold text-slate-900">讲解记录</h1>
+        <h1 class="text-2xl font-bold text-slate-900 dark:text-slate-100">讲解记录</h1>
         <p class="text-sm text-slate-500 mt-0.5">历史讲解回顾</p>
       </div>
 
@@ -30,7 +30,7 @@
           v-model="searchKeyword"
           type="text"
           placeholder="搜索主题名..."
-          class="w-full pl-9 pr-4 py-2.5 bg-white rounded-xl shadow-sm border border-slate-100 text-sm text-slate-700 placeholder:text-slate-300 focus:outline-none focus:border-[#4F6EF7] focus:ring-1 focus:ring-[#4F6EF7]/20 transition-colors"
+          class="w-full pl-9 pr-4 py-2.5 bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-100 dark:border-slate-700 text-sm text-slate-700 dark:text-slate-300 placeholder:text-slate-300 focus:outline-none focus:border-[#4F6EF7] focus:ring-1 focus:ring-[#4F6EF7]/20 transition-colors"
         />
       </div>
 
@@ -53,7 +53,7 @@
           :class="
             sortMode === 'score'
               ? 'bg-[#4F6EF7] text-white'
-              : 'bg-white text-slate-500 shadow-sm active:bg-slate-50'
+              : 'bg-white dark:bg-slate-800 text-slate-500 shadow-sm active:bg-slate-50 dark:active:bg-slate-700'
           "
           @click="sortMode = 'score'"
         >
@@ -64,11 +64,11 @@
 
       <!-- 统计概览条 -->
       <div class="flex gap-3">
-        <div class="flex-1 bg-white rounded-2xl shadow-sm p-3 text-center">
+        <div class="flex-1 bg-white dark:bg-slate-800 rounded-2xl shadow-sm p-3 text-center">
           <p class="text-xl font-bold text-[#4F6EF7]">{{ filteredSessions.length }}</p>
           <p class="text-[11px] text-slate-400">总记录</p>
         </div>
-        <div class="flex-1 bg-white rounded-2xl shadow-sm p-3 text-center">
+        <div class="flex-1 bg-white dark:bg-slate-800 rounded-2xl shadow-sm p-3 text-center">
           <p class="text-xl font-bold text-emerald-600">{{ avgScore }}</p>
           <p class="text-[11px] text-slate-400">平均分</p>
         </div>
@@ -83,12 +83,35 @@
         <div
           v-for="session in filteredSessions"
           :key="session.id"
-          class="bg-white rounded-2xl shadow-sm p-4 cursor-pointer active:scale-[0.98] transition-transform duration-150 relative"
-          @click="handleClick(session)"
-          @touchstart="onTouchStart($event, session)"
-          @touchend="onTouchEnd($event, session)"
-          @touchmove="onTouchMove"
+          class="relative overflow-hidden rounded-2xl"
         >
+          <!-- 滑动操作背景层 -->
+          <div class="absolute inset-0 flex">
+            <div
+              class="flex-1 bg-emerald-500 flex items-center px-4"
+              :style="{ opacity: Math.min(1, swipeVal(session.id) / 80) }"
+            >
+              <Check :size="18" class="text-white mr-1" /> 标记完成
+            </div>
+            <div
+              class="flex-1 bg-red-500 flex items-center justify-end px-4"
+              :style="{ opacity: Math.min(1, Math.abs(swipeVal(session.id)) / 80) }"
+            >
+              删除 <Trash2 :size="18" class="text-white ml-1" />
+            </div>
+          </div>
+          <!-- 内容层 -->
+          <div
+            class="relative bg-white dark:bg-slate-800 shadow-sm p-4 cursor-pointer active:scale-[0.98] transition-transform duration-150 touch-none"
+            :style="{
+              transform: `translateX(${swipeVal(session.id)}px)`,
+              transition: swipeVal(session.id) === 0 ? 'transform 0.3s ease' : 'none'
+            }"
+            @click="handleClick(session)"
+            @touchstart.passive="handleSwipeStart(session.id, $event)"
+            @touchmove.prevent="handleSwipeMove(session.id, $event)"
+            @touchend="handleSwipeEnd(session.id)"
+          >
           <div class="flex items-start justify-between gap-3">
             <div class="flex-1 min-w-0">
               <!-- 类型标签 + 标题 -->
@@ -116,6 +139,8 @@
               >{{ session.score }}</span>
               <span class="text-[9px] text-slate-400">分</span>
             </div>
+          </div>
+          <!-- 内容层结束 -->
           </div>
         </div>
       </div>
@@ -150,7 +175,7 @@
             <div class="w-10 h-1 bg-slate-200 rounded-full mx-auto mb-4" />
             <p class="text-sm font-semibold text-slate-800 px-2 mb-2 truncate">{{ menuSession.topicName }}</p>
             <button
-              class="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm text-slate-700 active:bg-slate-50 transition-colors"
+              class="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm text-slate-700 dark:text-slate-300 active:bg-slate-50 dark:active:bg-slate-700 transition-colors"
               @click="viewDetail(menuSession)"
             >
               <Eye :size="18" class="text-[#4F6EF7]" />
@@ -177,7 +202,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch, onMounted } from 'vue'
+import { ref, computed, watch, onMounted, inject, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import {
   Mic,
@@ -188,11 +213,66 @@ import {
   BarChart3,
   Eye,
   Trash2,
+  Check,
 } from 'lucide-vue-next'
 import type { FeynmanSession } from '@/types'
 import { usePullRefresh } from '@/composables/usePullRefresh'
+import { useUndoRedo } from '@/composables/useUndoRedo'
 
 const router = useRouter()
+
+// 获取全局 Toast（用于右滑标记提示）
+const showToast = inject<(msg: string, type?: string) => void>('toast')
+
+// ==================== 滑动手势跟踪 ====================
+
+/** 各列表项的滑动偏移量映射 */
+const swipeMaps = ref<Record<string, number>>({})
+
+/** 各列表项的触摸起始 X 坐标 */
+const swipeStartX = ref<Record<string, number>>({})
+
+/** 获取滑动值（确保为数字类型） */
+function swipeVal(id: string): number {
+  return Number(swipeMaps.value[id] || 0)
+}
+
+/**
+ * 滑动开始 - 记录起始位置
+ */
+function handleSwipeStart(id: string, e: TouchEvent) {
+  swipeStartX.value[id] = e.touches[0].clientX
+  swipeMaps.value[id] = 0
+}
+
+/**
+ * 滑动中 - 计算并限制偏移量
+ */
+function handleSwipeMove(id: string, e: TouchEvent) {
+  const diff = e.touches[0].clientX - (swipeStartX.value[id] || 0)
+  // 限制最大偏移范围，添加阻力
+  const clamped = Math.max(-120, Math.min(120, diff * 0.6))
+  swipeMaps.value[id] = clamped
+}
+
+/**
+ * 滑动结束 - 判断是否触发操作
+ */
+function handleSwipeEnd(id: string) {
+  const x = swipeMaps.value[id] || 0
+  if (x <= -80) {
+    // 左滑删除
+    const session = sessions.value.find((s) => s.id === id)
+    if (session) {
+      confirmDelete(session)
+    }
+  } else if (x >= 80) {
+    // 右滑标记完成
+    showToast?.('已标记为已完成', 'success')
+  }
+  // 弹回原位
+  swipeMaps.value[id] = 0
+}
 
 // 下拉刷新
 const refreshContainerRef = ref<HTMLElement>()
@@ -303,6 +383,27 @@ function resolveTopicName(session: Record<string, unknown>): string {
 
 /** 原始会话列表 */
 const sessions = ref<DisplaySession[]>(loadSessions())
+
+// ==================== 全局撤销/重做（功能2） ====================
+
+const { undo, redo, execute } = useUndoRedo(sessions.value)
+
+/**
+ * 全局键盘快捷键：Ctrl+Z 撤销，Ctrl+Y/Ctrl+Shift+Z 重做
+ */
+function handleGlobalKeydown(e: KeyboardEvent): void {
+  if ((e.ctrlKey || e.metaKey) && e.key === 'z' && !e.shiftKey) {
+    e.preventDefault()
+    if (undo()) {
+      sessions.value = loadSessions()
+      showToast?.('已撤销删除操作', 'info')
+    }
+  }
+  if ((e.ctrlKey || e.metaKey) && (e.key === 'y' || (e.key === 'z' && e.shiftKey))) {
+    e.preventDefault()
+    redo()
+  }
+}
 
 // 监听 localStorage 变化（跨标签页同步）
 watch(
@@ -432,6 +533,9 @@ function confirmDelete(session: DisplaySession) {
   const confirmed = window.confirm(`确定要删除「${session.topicName}」这条讲解记录吗？`)
   if (!confirmed) return
 
+  // 删除前保存当前状态到撤销栈
+  execute(sessions.value as any)
+
   // 从列表中移除
   const idx = sessions.value.findIndex((s) => s.id === session.id)
   if (idx !== -1) {
@@ -440,6 +544,7 @@ function confirmDelete(session: DisplaySession) {
 
   // 同步回 localStorage
   saveToStorage()
+  showToast?.('已删除 · 按 Ctrl+Z 可恢复', 'warning')
 }
 
 /** 将当前会话列表写回 localStorage */
@@ -460,11 +565,18 @@ function saveToStorage(): void {
   }
 }
 
-// 初始化下拉刷新绑定
+// 初始化下拉刷新绑定 + 撤销/重做快捷键
 onMounted(() => {
   if (refreshContainerRef.value) {
     init(refreshContainerRef.value)
   }
+  // 注册撤销/重做全局快捷键
+  window.addEventListener('keydown', handleGlobalKeydown)
+})
+
+onUnmounted(() => {
+  // 清理撤销/重做快捷键监听
+  window.removeEventListener('keydown', handleGlobalKeydown)
 })
 </script>
 
