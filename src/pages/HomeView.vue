@@ -32,7 +32,7 @@
             v-model="searchQuery"
             type="text"
             placeholder="搜索主题、闪卡、讲解记录..."
-            class="flex-1 bg-transparent text-sm text-slate-800 placeholder:text-slate-400 outline-none search-input-main"
+            class="flex-1 bg-transparent text-sm text-slate-800 dark:text-slate-200 placeholder:text-slate-400 dark:placeholder:text-slate-500 outline-none search-input-main"
             @focus="showSearchResults = true"
             @input="onSearchInput"
           />

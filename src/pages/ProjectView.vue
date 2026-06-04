@@ -203,7 +203,7 @@
                   <input
                     v-if="editingSubtaskId === st.id"
                     v-model="editSubtaskText"
-                    class="flex-1 px-2 py-1 text-sm border border-blue-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-500/20"
+                    class="flex-1 px-2 py-1 text-sm border border-blue-300 dark:border-blue-400 rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-500/20 text-slate-800 dark:text-slate-200 bg-white dark:bg-slate-800"
                     @keydown.enter="saveSubtaskText(project.id, st.id)"
                     @keydown.escape="cancelSubtaskEdit"
                     @blur="saveSubtaskText(project.id, st.id)"

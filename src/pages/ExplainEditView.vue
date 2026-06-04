@@ -68,7 +68,7 @@
           v-model="customInput"
           type="text"
           placeholder="或输入自定义主题..."
-          class="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 transition-all"
+          class="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-600 text-sm text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 transition-all"
           @input="onCustomInput"
         />
       </div>
@@ -89,7 +89,7 @@
           v-else
           ref="editorRef"
           contenteditable="true"
-          class="min-h-[140px] w-full p-3.5 rounded-xl border border-slate-200 text-sm text-slate-800 leading-relaxed focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 transition-all empty:before:content-[attr(data-placeholder)] empty:before:text-slate-400"
+          class="min-h-[140px] w-full p-3.5 rounded-xl border border-slate-200 dark:border-slate-600 text-sm text-slate-800 dark:text-slate-200 leading-relaxed focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 transition-all empty:before:content-[attr(data-placeholder)] empty:before:text-slate-400 dark:empty:before:text-slate-500"
           data-placeholder="在这里写下你的讲解，就像在教一个完全不懂的朋友..."
           @input="onEditorInput"
           @keydown="handleKeyboard"

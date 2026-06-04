@@ -17,7 +17,7 @@
           <input
             v-if="showNameEdit"
             v-model="userName"
-            class="text-lg font-bold text-slate-900 bg-transparent border-b border-blue-400 outline-none w-full"
+            class="text-lg font-bold text-slate-900 dark:text-slate-200 bg-transparent border-b border-blue-400 outline-none w-full"
             placeholder="输入你的名字"
             @blur="showNameEdit = false"
             @keydown.enter="showNameEdit = false"
@@ -139,7 +139,7 @@
           <input
             v-model="reminderTime"
             type="time"
-            class="w-full px-3 py-2 text-sm border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+            class="w-full px-3 py-2 text-sm border border-slate-200 dark:border-slate-600 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 text-slate-800 dark:text-slate-200 bg-white dark:bg-slate-800"
             @change="saveReminderTime"
           />
           <p class="text-[11px] text-slate-400 leading-relaxed">
@@ -276,7 +276,7 @@
             v-model="apiKeyInput"
             type="password"
             placeholder="输入 DeepSeek API Key (sk-...)"
-            class="w-full px-3 py-2.5 rounded-xl border border-slate-200 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400"
+            class="w-full px-3 py-2.5 rounded-xl border border-slate-200 dark:border-slate-600 text-sm font-mono text-slate-800 dark:text-slate-200 bg-white dark:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400"
             @keydown.enter="saveKey"
           />
           <div class="flex items-center gap-2">
