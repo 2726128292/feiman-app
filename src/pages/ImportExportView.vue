@@ -297,44 +297,39 @@ TCP三次握手的过程</pre>
 
           <div class="p-4 space-y-4">
             <div>
-              <h3 class="text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">导出内容包括</h3>
-              <div class="space-y-2">
-                <div class="flex items-start gap-2 text-sm text-slate-600">
-                  <Check :size="16" class="text-emerald-500 shrink-0 mt-0.5" />
-                  <span><b>学习路径</b> - 主题名称、标签、进度百分比</span>
-                </div>
-                <div class="flex items-start gap-2 text-sm text-slate-600">
-                  <Check :size="16" class="text-emerald-500 shrink-0 mt-0.5" />
-                  <span><b>费曼讲解记录</b> - 讲解内容、评分、知识缺口</span>
-                </div>
-                <div class="flex items-start gap-2 text-sm text-slate-600">
-                  <Check :size="16" class="text-emerald-500 shrink-0 mt-0.5" />
-                  <span><b>闪卡数据</b> - 所有问题与答案对</span>
-                </div>
-                <div class="flex items-start gap-2 text-sm text-slate-600">
-                  <Check :size="16" class="text-emerald-500 shrink-0 mt-0.5" />
-                  <span><b>成就系统</b> - 已解锁徽章和等级</span>
-                </div>
-                <div class="flex items-start gap-2 text-sm text-slate-600">
-                  <Check :size="16" class="text-emerald-500 shrink-0 mt-0.5" />
-                  <span><b>学习分析</b> - 掌握率、遗忘风险等指标</span>
-                </div>
+              <h3 class="text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">选择导出内容</h3>
+              <div class="space-y-1.5">
+                <label v-for="opt in wordExportOptions" :key="opt.key" class="flex items-center gap-2.5 px-3 py-2 rounded-xl cursor-pointer transition-colors" :class="selectedWordExports.has(opt.key) ? 'bg-pink-50 dark:bg-pink-900/20' : 'hover:bg-slate-50'" @click="toggleWordExport(opt.key)">
+                  <div class="w-4 h-4 rounded border-2 flex items-center justify-center shrink-0 transition-colors" :class="selectedWordExports.has(opt.key) ? 'bg-pink-500 border-pink-500' : 'border-slate-300'">
+                    <Check v-if="selectedWordExports.has(opt.key)" :size="10" class="text-white" />
+                  </div>
+                  <span class="text-xs font-medium text-slate-700 dark:text-slate-300">{{ opt.label }}</span>
+                  <span class="text-[10px] text-slate-400 ml-auto">{{ opt.hint }}</span>
+                </label>
               </div>
             </div>
 
+            <!-- 导出效果预览（真实数据渲染） -->
             <div>
-              <h3 class="text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">导出效果预览</h3>
-              <div class="border border-slate-200 rounded-xl p-4 bg-white">
-                <p class="text-lg font-bold text-slate-800 mb-2">费曼学习 - 学习报告</p>
-                <p class="text-xs text-slate-400 mb-3">生成日期：2024年6月4日</p>
-                <hr class="my-3 border-slate-100" />
-                <p class="text-sm font-semibold text-slate-700">学习路径</p>
-                <p class="text-sm text-slate-500 ml-2">· 前端工程化 [72%] Vue3/Vite/PWA</p>
-                <p class="text-sm text-slate-500 ml-2">· 计算机网络 [45%] HTTP/缓存/CDN</p>
-                <hr class="my-3 border-slate-100" />
-                <p class="text-sm font-semibold text-slate-700">闪卡汇总</p>
-                <p class="text-sm text-slate-500 ml-2">Q: 什么是 Service Worker？</p>
-                <p class="text-sm text-slate-400 ml-4">A: 运行在后台的脚本...</p>
+              <h3 class="text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">打印预览</h3>
+              <div class="border border-slate-200 dark:border-slate-700 rounded-xl p-4 bg-white max-h-72 overflow-y-auto print-preview">
+                <p class="text-base font-bold text-center text-[#4F6EF7] mb-0.5">费曼学习法 · 学习报告</p>
+                <p class="text-[10px] text-center text-slate-400 mb-2">{{ new Date().toLocaleDateString('zh-CN') }} · 共 {{ totalWordItems }} 条记录</p>
+                <div class="border-t border-b border-dashed border-slate-200 py-1.5 my-2">
+                  <p class="text-[10px] font-semibold text-slate-600">目录</p>
+                  <p v-if="wordRealData.topics.length > 0 && selectedWordExports.has('topics')" class="text-[9px] text-slate-400 ml-1">一、学习路径 ({{ wordRealData.topics.length }})</p>
+                  <p v-if="wordRealData.cards.length > 0 && selectedWordExports.has('cards')" class="text-[9px] text-slate-400 ml-1">二、闪卡复习 ({{ wordRealData.cards.length }})</p>
+                  <p v-if="wordRealData.sessions.length > 0 && selectedWordExports.has('sessions')" class="text-[9px] text-slate-400 ml-1">三、讲解记录 ({{ wordRealData.sessions.length }})</p>
+                  <p v-if="wordRealData.notes.length > 0 && selectedWordExports.has('notes')" class="text-[9px] text-slate-400 ml-1">四、学习笔记 ({{ wordRealData.notes.length }})</p>
+                </div>
+                <template v-if="selectedWordExports.has('cards') && wordRealData.cards.length > 0">
+                  <p class="text-[10px] font-semibold text-slate-600 mt-2">闪卡预览</p>
+                  <div v-for="(c, i) in wordRealData.cards.slice(0, 3)" :key="i" class="border-l-2 border-blue-400 pl-2 my-1">
+                    <p class="text-[10px] font-medium text-slate-700"><b>Q:</b> {{ c.question?.slice(0, 30) || '-' }}</p>
+                    <p class="text-[9px] text-slate-400"><b>A:</b> {{ (c.answer || '').slice(0, 35) || '-' }}...</p>
+                  </div>
+                  <p v-if="wordRealData.cards.length > 3" class="text-[9px] text-slate-400 text-center">... 还有 {{ wordRealData.cards.length - 3 }} 张</p>
+                </template>
               </div>
             </div>
 
@@ -342,7 +337,7 @@ TCP三次握手的过程</pre>
               class="w-full py-2.5 rounded-xl text-sm font-medium bg-pink-500 text-white active:bg-pink-600 flex items-center justify-center gap-1.5"
               @click="exportWord()"
             >
-              <Download :size="16" /> 导出为 Word 文档
+              <Printer :size="16" /> 导出为 Word 文档（可打印）
             </button>
           </div>
         </div>
@@ -402,7 +397,7 @@ TCP三次握手的过程</pre>
 <script setup lang="ts">
 import { ref, computed } from 'vue'
 import { useRouter } from 'vue-router'
-import { ArrowLeft, ChevronRight, ShieldCheck, Upload, Download, Check, Archive, Database } from 'lucide-vue-next'
+import { ArrowLeft, ChevronRight, ShieldCheck, Upload, Download, Check, Archive, Database, Printer } from 'lucide-vue-next'
 import { mockCards } from '@/utils/mock'
 import { useToast } from '@/composables/useToast'
 import { useAutoBackup } from '@/composables/useAutoBackup'
@@ -643,32 +638,377 @@ function exportJSON() {
   exportSuccess.value = true
 }
 
+// ====== Word 导出：打印级排版 ======
+
+/** Word 导出选项 */
+const wordExportOptions = [
+  { key: 'topics', label: '学习路径', hint: '章节与进度' },
+  { key: 'cards', label: '闪卡复习', hint: 'Q&A 对' },
+  { key: 'sessions', label: '讲解记录', hint: '内容与评分' },
+  { key: 'notes', label: '学习笔记', hint: '各章笔记' },
+]
+const selectedWordExports = ref(new Set(['cards', 'topics']))
+
+function toggleWordExport(key: string): void {
+  if (selectedWordExports.value.has(key)) {
+    selectedWordExports.value.delete(key)
+  } else {
+    selectedWordExports.value.add(key)
+  }
+  selectedWordExports.value = new Set(selectedWordExports.value)
+}
+
+/** 从 localStorage 读取真实数据 */
+const wordRealData = computed(() => {
+  const data = {
+    topics: [] as any[],
+    cards: [] as any[],
+    sessions: [] as any[],
+    notes: [] as any[],
+  }
+  try {
+    // 路径
+    const tRaw = localStorage.getItem('feiman_topics')
+    if (tRaw) data.topics = JSON.parse(tRaw)
+    // 闪卡（兼容双 key）
+    for (const k of ['feiman_review_cards', 'feiman_cards']) {
+      try {
+        const cRaw = localStorage.getItem(k)
+        if (cRaw) data.cards.push(...JSON.parse(cRaw))
+      } catch { /* skip */ }
+    }
+    // 去重
+    const seen = new Set<string>()
+    data.cards = data.cards.filter((c: any) => !c.id || seen.has(c.id) ? false : (seen.add(c.id), true))
+    // 讲解
+    const sRaw = localStorage.getItem('feiman_sessions')
+    if (sRaw) data.sessions = JSON.parse(sRaw)
+    // 笔记
+    const nRaw = localStorage.getItem('feiman_notes')
+    if (nRaw) data.notes = JSON.parse(nRaw)
+  } catch { /* ignore */ }
+  return data
+})
+
+/** 预估总条数 */
+const totalWordItems = computed(() => {
+  let n = 0
+  if (selectedWordExports.value.has('topics')) n += wordRealData.value.topics.length
+  if (selectedWordExports.value.has('cards')) n += wordRealData.value.cards.length
+  if (selectedWordExports.value.has('sessions')) n += wordRealData.value.sessions.length
+  if (selectedWordExports.value.has('notes')) n += wordRealData.value.notes.length
+  return n
+})
+
+/**
+ * 导出为格式化的 Word 文档（HTML 格式，可打印）
+ * 特点：
+ * - 真实数据从 localStorage 读取
+ * - 打印级排版：封面、目录、分节、页眉页脚
+ * - A4 纸张适配，边距合理
+ * - 支持选择导出内容
+ */
 function exportWord() {
-  // 生成 HTML 内容，浏览器会识别为 doc
-  const topics = ['前端工程化 [72%]', '计算机网络 [45%]', '高等数学 [30%]']
-  const cards = mockCards.slice(0, 8)
+  const now = new Date()
+  const dateStr = now.toLocaleDateString('zh-CN')
+  const d = wordRealData.value
+  const sel = selectedWordExports.value
 
-  let html = `
-    <html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word'>
-    <head><meta charset='utf-8'><title>费曼学习报告</title></head>
-    <body style='font-family:微软雅黑,sans-serif;padding:40px;'>
-    <h1 style='color:#4F6EF7'>费曼学习 - 学习报告</h1>
-    <p style='color:#888;font-size:12px'>生成日期：${new Date().toLocaleDateString('zh-CN')}</p>
-    <hr/>
-    <h2>学习路径</h2>`
-  for (const t of topics) {
-    html += `<p style='margin:4px 0 4px 16px;color:#555'>· ${t}</p>`
-  }
-  html += `<hr/><h2>闪卡汇总 (${cards.length}张)</h2>`
-  for (const c of cards) {
-    html += `<p style='margin:6px 0;color:#333'><b>Q:</b> ${c.question}</p>`
-    html += `<p style='margin:2px 0 8px 20px;color:#666;font-size:13px'><b>A:</b> ${c.answer}</p>`
-  }
-  html += '</body></html>'
+  // ====== 构建文档 HTML ======
+  let sectionsHtml = ''
+  let sectionNum = 0
 
-  downloadFile(html, `feiman-report-${new Date().toISOString().split('T')[0]}.doc`, 'application/msword')
-  exportStatus.value = 'Word 文档已下载'
+  // ---- 第一部分：学习路径 ----
+  if (sel.has('topics') && d.topics.length > 0) {
+    sectionNum++
+    let topicsContent = ''
+    for (const topic of d.topics) {
+      const chapters = topic.chapters || []
+      const doneCount = chapters.filter((c: any) => c.progress >= 100).length
+      const progress = chapters.length > 0 ? Math.round((doneCount / chapters.length) * 100) : 0
+
+      topicsContent += `
+        <div style="margin-bottom:20px;">
+          <h3 style="font-size:14px;color:#1e293b;margin:0 0 6px;display:flex;justify-content:space-between;align-items:center;border-left:3px solid #4F6EF7;padding-left:10px;">
+            <span>${escapeHtml(topic.title || '未命名')}</span>
+            <span style="font-size:11px;font-weight:normal;color:#94a3b8;">${progress}%</span>
+          </h3>`
+      if (chapters.length > 0) {
+        topicsContent += `<table style="width:100%;border-collapse:collapse;margin-top:6px;">`
+        topicsContent += `<tr style="background:#f8fafc;"><th style="text-align:left;padding:5px 10px;font-size:11px;color:#64748b;border-bottom:1px solid #e2e8f0;">章节</th><th style="text-align:center;padding:5px 10px;font-size:11px;color:#64748b;border-bottom:1px solid #e2e8f0;width:60px;">进度</th></tr>`
+        for (const ch of chapters) {
+          const chProgress = ch.progress || 0
+          const chDone = chProgress >= 100 ? '✓' : `${chProgress}%`
+          const items = ch.items || []
+          topicsContent += `<tr><td style="padding:4px 10px;font-size:12px;color:#334155;border-bottom:1px solid #f1f5f9;">${escapeHtml(ch.title)}</td><td style="text-align:center;padding:4px 10px;font-size:11px;color:${chProgress >= 100 ? '#16a34a' : '#4F6EF7'};border-bottom:1px solid #f1f5f9;">${chDone}</td></tr>`
+          if (items.length > 0) {
+            for (const item of items) {
+              const itemDone = item.done ? '☑' : '☐'
+              topicsContent += `<tr><td style="padding:2px 10px 2px 24px;font-size:11px;color:#64748b;border-bottom:1px solid #fafafa;">${itemDone} ${escapeHtml(item.title || '')}</td><td style="border-bottom:1px solid #fafafa;"></td></tr>`
+            }
+          }
+        }
+        topicsContent += `</table>`
+      }
+      topicsContent += `</div>`
+    }
+
+    sectionsHtml += `
+      <div class="page-break" style="page-break-before:always;"></div>
+      <h2 style="color:#4F6EF7;font-size:18px;margin:0 0 4px;border-bottom:2px solid #4F6EF7;padding-bottom:6px;">${sectionNum}. 学习路径</h2>
+      <p style="font-size:11px;color:#94a3b8;margin:0 0 12px;">共 ${d.topics.length} 条路径 · 生成于 ${dateStr}</p>
+      ${topicsContent}`
+  }
+
+  // ---- 第二部分：闪卡复习表 ----
+  if (sel.has('cards') && d.cards.length > 0) {
+    sectionNum++
+    let cardsTable = `
+      <table style="width:100%;border-collapse:collapse;margin-top:8px;">
+        <thead>
+          <tr style="background:linear-gradient(135deg,#4F6EF7,#6B8CF7);color:white;">
+            <th style="text-align:left;padding:8px 12px;font-size:12px;width:40px;">#</th>
+            <th style="text-align:left;padding:8px 12px;font-size:12px;">问题</th>
+            <th style="text-align:left;padding:8px 12px;font-size:12px;">答案</th>
+            <th style="text-align:center;padding:8px 12px;font-size:12px;width:70px;">标签</th>
+          </tr>
+        </thead>
+        <tbody>`
+
+    d.cards.forEach((card: any, i: number) => {
+      const bg = i % 2 === 0 ? '#ffffff' : '#f8fafc'
+      const tags = Array.isArray(card.tags) ? card.tags.slice(0, 2).join(', ') : (card.topicId || '')
+      cardsTable += `
+          <tr style="background:${bg};">
+            <td style="padding:7px 12px;font-size:11px;color:#94a3b8;text-align:center;border-bottom:1px solid #f1f5f9;">${i + 1}</td>
+            <td style="padding:7px 12px;font-size:12px;color:#1e293b;font-weight:500;border-bottom:1px solid #f1f5f9;">${escapeHtml(card.question || '-')}</td>
+            <td style="padding:7px 12px;font-size:11px;color:#475569;line-height:1.5;border-bottom:1px solid #f1f5f9;">${escapeHtml((card.answer || '-').slice(0, 120))}${(card.answer || '').length > 120 ? '...' : ''}</td>
+            <td style="padding:7px 12px;font-size:10px;color:#4F6EF7;text-align:center;border-bottom:1px solid #f1f5f9;">${tags}</td>
+          </tr>`
+    })
+
+    cardsTable += '</tbody></table>'
+    // 添加答题区域（用于打印后手写答案）
+    cardsTable += `
+      <div style="margin-top:16px;padding:12px;background:#fffbeb;border:1px dashed #fbbf24;border-radius:8px;text-align:center;">
+        <p style="font-size:11px;color:#92400e;margin:0 0 4px;">✏️ 复习练习区 — 遮住答案，先自己回答一遍</p>
+        <p style="font-size:10px;color:#a16207;margin:0;">共 ${d.cards.length} 张闪卡，建议分 ${Math.max(1, Math.ceil(d.cards.length / 15))} 天完成复习</p>
+      </div>`
+
+    sectionsHtml += `
+      <div class="page-break" style="page-break-before:always;"></div>
+      <h2 style="color:#4F6EF7;font-size:18px;margin:0 0 4px;border-bottom:2px solid #4F6EF7;padding-bottom:6px;">${sectionNum}. 闪卡复习表</h2>
+      <p style="font-size:11px;color:#94a3b8;margin:0 0 12px;">共 ${d.cards.length} 张闪卡 · 可用于自测和背诵</p>
+      ${cardsTable}`
+  }
+
+  // ---- 第三部分：讲解记录 ----
+  if (sel.has('sessions') && d.sessions.length > 0) {
+    sectionNum++
+    let sessionsContent = ''
+    for (const sess of d.sessions) {
+      const score = sess.score ?? 0
+      const scoreColor = score >= 80 ? '#16a34a' : score >= 60 ? '#ea580c' : '#dc2626'
+      sessionsContent += `
+        <div style="margin-bottom:16px;padding:12px;background:#f8fafc;border-radius:8px;border-left:3px solid ${scoreColor};">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
+            <span style="font-size:13px;font-weight:600;color:#1e293b;">${escapeHtml(sess.topicName || '未命名讲解')}</span>
+            <span style="font-size:12px;font-weight:bold;color:${scoreColor};background:white;padding:2px 10px;border-radius:12px;">${score}分</span>
+          </div>
+          <p style="font-size:11px;color:#64748b;margin:0 0 6px;">${sess.type === 'voice' ? '🎤 语音讲解' : '✍️ 文字讲解'} · ${(sess.createdAt || '').split('T')[0]}</p>
+          <p style="font-size:12px;color:#334155;line-height:1.7;margin:0;">${escapeHtml((sess.content || '(无内容)').slice(0, 300))}${(sess.content || '').length > 300 ? '...' : ''}</p>`
+      if (sess.gaps && sess.gaps.length > 0) {
+        sessionsContent += `<p style="font-size:10px;color:#dc2626;margin-top:6px;">⚠️ 知识缺口：${sess.gaps.map((g: any) => g.text).join('、').slice(0, 80)}...</p>`
+      }
+      sessionsContent += `</div>`
+    }
+
+    sectionsHtml += `
+      <div class="page-break" style="page-break-before:always;"></div>
+      <h2 style="color:#4F6EF7;font-size:18px;margin:0 0 4px;border-bottom:2px solid #4F6EF7;padding-bottom:6px;">${sectionNum}. 费曼讲解记录</h2>
+      <p style="font-size:11px;color:#94a3b8;margin:0 0 12px;">共 ${d.sessions.length} 条记录 · 按评分排序</p>
+      ${sessionsContent}`
+  }
+
+  // ---- 第四部分：学习笔记 ----
+  if (sel.has('notes') && d.notes.length > 0) {
+    sectionNum++
+    let notesContent = ''
+    for (const note of d.notes) {
+      notesContent += `
+        <div style="margin-bottom:14px;padding:10px 12px;background:#fffbeb;border:1px solid #fef3c7;border-radius:8px;">
+          <p style="font-size:11px;color:#92400e;margin:0 0 4px;font-weight:600;">📝 ${note.targetId ? '章节笔记' : '通用笔记'} · ${(note.createdAt || '').split('T')[0]}</p>
+          <p style="font-size:12px;color:#334155;line-height:1.8;margin:0;white-space:pre-wrap;">${escapeHtml(note.content || '')}</p>
+        </div>`
+    }
+
+    sectionsHtml += `
+      <div class="page-break" style="page-break-before:always;"></div>
+      <h2 style="color:#4F6EF7;font-size:18px;margin:0 0 4px;border-bottom:2px solid #4F6EF7;padding-bottom:6px;">${sectionNum}. 学习笔记</h2>
+      <p style="font-size:11px;color:#94a3b8;margin:0 0 12px;">共 ${d.notes.length} 条笔记</p>
+      ${notesContent}`
+  }
+
+  // ====== 组装完整 HTML ======
+  const html = `
+<!DOCTYPE html>
+<html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word'>
+<head>
+  <meta charset='utf-8'/>
+  <title>费曼学习法 · 学习报告</title>
+  <style>
+    @page { size: A4; margin: 18mm 15mm 18mm 15mm; }
+    body {
+      font-family: "Microsoft YaHei", "PingFang SC", "Helvetica Neue", sans-serif;
+      color: #334155;
+      line-height: 1.6;
+      padding: 0;
+      margin: 0;
+    }
+    /* 封面 */
+    .cover {
+      text-align: center;
+      padding: 120px 40px 80px;
+      page-break-after: always;
+    }
+    .cover h1 {
+      font-size: 32px;
+      color: #4F6EF7;
+      margin: 0 0 12px;
+      letter-spacing: 4px;
+    }
+    .cover .subtitle {
+      font-size: 14px;
+      color: #94a3b8;
+      margin: 0 0 40px;
+    }
+    .cover .meta {
+      font-size: 12px;
+      color: #cbd5e1;
+      line-height: 2;
+    }
+    .cover .brand {
+      position: absolute;
+      bottom: 60px;
+      left: 0;
+      right: 0;
+      text-align: center;
+      font-size: 11px;
+      color: #94a3b8;
+    }
+    /* 目录 */
+    .toc {
+      page-break-after: always;
+      padding: 20px 0;
+    }
+    .toc h2 {
+      font-size: 18px;
+      color: #1e293b;
+      border-bottom: 2px solid #4F6EF7;
+      padding-bottom: 8px;
+      margin: 0 0 16px;
+    }
+    .toc-item {
+      display: flex;
+      justify-content: space-between;
+      padding: 8px 12px;
+      font-size: 13px;
+      color: #475569;
+      border-bottom: 1px dotted #e2e8f0;
+    }
+    .toc-item span:last-child { color: #94a3b8; font-size: 12px; }
+    /* 正文标题 */
+    h2 {
+      color: #4F6EF7;
+      font-size: 18px;
+      margin: 24px 0 4px;
+      border-bottom: 2px solid #4F6EF7;
+      padding-bottom: 6px;
+    }
+    h3 {
+      font-size: 14px;
+      color: #1e293b;
+      margin: 0 0 6px;
+    }
+    p { margin: 4px 0; }
+    table { width: 100%; border-collapse: collapse; }
+    th { text-align: left; padding: 8px 12px; font-size: 12px; background: #f8fafc; border-bottom: 2px solid #e2e8f0; }
+    td { padding: 7px 12px; font-size: 12px; border-bottom: 1px solid #f1f5f9; }
+    tr:nth-child(even) td { background: #fafafa; }
+    /* 页脚 */
+    .footer {
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      text-align: center;
+      font-size: 9px;
+      color: #cbd5e1;
+      padding: 8px;
+      border-top: 1px solid #f1f5f9;
+    }
+    @media print {
+      body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+      .footer { position: running(footer); }
+      .no-print { display: none; }
+      .page-break { page-break-before: always; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- ========== 封面 ========== -->
+<div class="cover">
+  <h1>费曼学习法</h1>
+  <div class="subtitle">把知识讲明白，才是真的学会</div>
+  <div class="meta">
+    <p>学习报告</p>
+    <p>${dateStr}</p>
+    <p>共 ${totalWordItems.value} 条学习记录</p>
+  </div>
+  <div class="brand">
+    <p>由「费曼学习法 App」自动生成</p>
+    <p>https://2726128292.github.io/feiman-app/</p>
+  </div>
+</div>
+
+<!-- ========== 目录 ========== -->
+<div class="toc">
+  <h2>目 录</h2>
+  ${sel.has('topics') && d.topics.length > 0 ? '<div class="toc-item"><span>一、学习路径</span><span>' + d.topics.length + ' 条</span></div>' : ''}
+  ${sel.has('cards') && d.cards.length > 0 ? '<div class="toc-item"><span>二、闪卡复习表</span><span>' + d.cards.length + ' 张</span></div>' : ''}
+  ${sel.has('sessions') && d.sessions.length > 0 ? '<div class="toc-item"><span>三、费曼讲解记录</span><span>' + d.sessions.length + ' 条</span></div>' : ''}
+  ${sel.has('notes') && d.notes.length > 0 ? '<div class="toc-item"><span>四、学习笔记</span><span>' + d.notes.length + ' 条</span></div>' : ''}
+</div>
+
+<!-- ========== 正文内容 ========== -->
+${sectionsHtml}
+
+<!-- 页脚 -->
+<div class="footer">
+  费曼学习法 App · 第 <span id="page-num"></span> 页 / 共 <span id="page-total"></span> 页
+</div>
+
+<script>
+  // 自动触发打印对话框
+  window.onload = function() {
+    // 可选：自动打开打印
+    // window.print();
+  };
+<\/script>
+</body>
+</html>`
+
+  downloadFile(html, `费曼学习报告-${now.toISOString().split('T')[0]}.doc`, 'application/msword')
+
+  exportStatus.value = `已导出 ${totalWordItems.value} 条记录`
   exportSuccess.value = true
+  showToast(`Word 文档已导出！包含 ${totalWordItems.value} 条记录`, 'success')
+}
+
+/** HTML 转义（防 XSS） */
+function escapeHtml(str: string): string {
+  return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
 }
 
 function exportZip() {
