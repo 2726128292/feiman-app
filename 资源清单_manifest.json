@@ -1,0 +1,112 @@
+{
+  "project": "费曼学习法仿App 旗舰版",
+  "docx": "费曼学习法仿App_旗舰版完整开发文档_真实UI图片版.docx",
+  "ui_images": [
+    {
+      "index": 1,
+      "name": "启动页_学习宇宙",
+      "file": "01_启动页_学习宇宙.png"
+    },
+    {
+      "index": 2,
+      "name": "首页_智能仪表盘",
+      "file": "02_首页_智能仪表盘.png"
+    },
+    {
+      "index": 3,
+      "name": "学习路径_目标拆解",
+      "file": "03_学习路径_目标拆解.png"
+    },
+    {
+      "index": 4,
+      "name": "创建路径_AI向导",
+      "file": "04_创建路径_AI向导.png"
+    },
+    {
+      "index": 5,
+      "name": "费曼讲解_编辑与AI追问",
+      "file": "05_费曼讲解_编辑与AI追问.png"
+    },
+    {
+      "index": 6,
+      "name": "语音讲解_实时转写",
+      "file": "06_语音讲解_实时转写.png"
+    },
+    {
+      "index": 7,
+      "name": "AI诊断_知识缺口分析",
+      "file": "07_AI诊断_知识缺口分析.png"
+    },
+    {
+      "index": 8,
+      "name": "知识图谱_关联网络",
+      "file": "08_知识图谱_关联网络.png"
+    },
+    {
+      "index": 9,
+      "name": "闪卡复习_间隔重复",
+      "file": "09_闪卡复习_间隔重复.png"
+    },
+    {
+      "index": 10,
+      "name": "智能测验_自动解析",
+      "file": "10_智能测验_自动解析.png"
+    },
+    {
+      "index": 11,
+      "name": "今日计划_AI排程",
+      "file": "11_今日计划_AI排程.png"
+    },
+    {
+      "index": 12,
+      "name": "项目实践_作品驱动",
+      "file": "12_项目实践_作品驱动.png"
+    },
+    {
+      "index": 13,
+      "name": "导入导出_多格式备份",
+      "file": "13_导入导出_多格式备份.png"
+    },
+    {
+      "index": 14,
+      "name": "设置中心_偏好与隐私",
+      "file": "14_设置中心_偏好与隐私.png"
+    },
+    {
+      "index": 15,
+      "name": "讲解广场_同伴互评",
+      "file": "15_讲解广场_同伴互评.png"
+    },
+    {
+      "index": 16,
+      "name": "学习分析_热力与建议",
+      "file": "16_学习分析_热力与建议.png"
+    },
+    {
+      "index": 17,
+      "name": "深色模式_夜间学习",
+      "file": "17_深色模式_夜间学习.png"
+    },
+    {
+      "index": 18,
+      "name": "成就系统_积分徽章",
+      "file": "18_成就系统_积分徽章.png"
+    }
+  ],
+  "diagrams": [
+    "技术架构图.png",
+    "学习闭环流程图.png",
+    "数据模型关系图.png"
+  ],
+  "tech_stack": [
+    "Vue 3",
+    "Vite 8",
+    "Vue Router 4 Hash",
+    "Tailwind CSS 3",
+    "localStorage",
+    "File API",
+    "PWA Service Worker",
+    "GitHub Pages",
+    "git subtree"
+  ]
+}
