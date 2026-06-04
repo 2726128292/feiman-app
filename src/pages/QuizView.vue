@@ -15,6 +15,18 @@
         />
       </div>
 
+      <!-- 加载中提示 -->
+      <div v-if="isGeneratingQuiz" class="text-center py-8">
+        <svg class="animate-spin h-8 w-8 mx-auto text-[#4F6EF7]" viewBox="0 0 24 24" fill="none">
+          <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="3" opacity="0.25"/>
+          <path d="M4 12a8 8 0 018-8" stroke="currentColor" stroke-width="3" stroke-linecap="round"/>
+        </svg>
+        <p class="text-sm text-slate-500 mt-2">AI 正在生成测验题目...</p>
+      </div>
+
+      <!-- 题目区域（加载完成后显示） -->
+      <template v-if="!isGeneratingQuiz">
+
       <!-- 题号 -->
       <p class="text-base font-bold text-[#4F6EF7] tabular-nums">
         {{ String(currentIndex + 1).padStart(2, '0') }} / {{ String(totalQuestions).padStart(2, '0') }}
@@ -66,21 +78,26 @@
         <p class="text-lg font-bold text-slate-800">测验完成！</p>
         <p class="text-sm text-slate-500 mt-1">得分：{{ score }} / {{ totalQuestions }}</p>
       </div>
+      </template>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted } from 'vue'
+import { generateQuiz, isAIReady, isLoading } from '@/composables/useDeepSeek'
 import { mockQuizQuestions } from '@/utils/mock'
 
-const questions = [...mockQuizQuestions]
+const questions = ref([...mockQuizQuestions])
 const currentIndex = ref(0)
 const selectedOption = ref<number | null>(null)
 const score = ref(0)
 
-const totalQuestions = computed(() => questions.length)
-const currentQuestion = computed(() => questions[currentIndex.value])
+// AI 出题状态
+const isGeneratingQuiz = ref(false)
+
+const totalQuestions = computed(() => questions.value.length)
+const currentQuestion = computed(() => questions.value[currentIndex.value])
 
 const progressPercent = computed(() =>
   Math.round(((currentIndex.value + (selectedOption.value !== null ? 1 : 0)) / totalQuestions.value) * 100)
@@ -130,4 +147,26 @@ function nextQuestion() {
     selectedOption.value = null
   }
 }
+
+// 组件挂载时尝试调用真实 API 出题
+onMounted(async () => {
+  if (isAIReady.value) {
+    isGeneratingQuiz.value = true
+    try {
+      const aiQuestions = await generateQuiz('递归', undefined, 5)
+      if (aiQuestions && aiQuestions.length > 0) {
+        questions.value = aiQuestions.map((q, i) => ({
+          id: `quiz-ai-${i}`,
+          ...q,
+          topicId: 'topic-3',
+        }))
+      }
+    } catch (err) {
+      console.error('AI 出题失败，使用模拟数据：', err)
+      // 保持 mock 数据不变
+    } finally {
+      isGeneratingQuiz.value = false
+    }
+  }
+})
 </script>

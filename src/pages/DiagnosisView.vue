@@ -104,12 +104,24 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
-import { useRouter } from 'vue-router'
+import { computed, ref, onMounted } from 'vue'
+import { useRouter, useRoute } from 'vue-router'
+import { diagnoseGaps, isAIReady, isLoading } from '@/composables/useDeepSeek'
 import { mockSessions } from '@/utils/mock'
 
 const router = useRouter()
-const diagnosis = mockSessions[0]
+const route = useRoute()
+
+// 诊断数据（支持从 API 或 mock 填充）
+const diagnosis = ref<{
+  score: number
+  gaps: Array<{ text: string; priority: 'high' | 'medium' | 'low'; suggestion?: string }>
+}>({
+  score: mockSessions[0].score,
+  gaps: mockSessions[0].gaps.map(g => ({ ...g })),
+})
+
+const isDiagnosing = ref(false)
 
 const priorityLabels: Record<string, string> = {
   high: '高优先级',
@@ -146,5 +158,34 @@ const radarPoints = computed(() => {
     const y = center.y - r * Math.sin(angle)
     return `${x},${y}`
   }).join(' ')
+})
+
+// 组件挂载时尝试调用真实 API 诊断
+onMounted(async () => {
+  const content = route.query.content ? decodeURIComponent(route.query.content as string) : ''
+  const topic = route.query.topic ? decodeURIComponent(route.query.topic as string) : ''
+  const queryScore = route.query.score ? Number(route.query.score) : null
+
+  if (isAIReady.value && content && topic) {
+    isDiagnosing.value = true
+      try {
+      const result = await diagnoseGaps(content, topic)
+      diagnosis.value = {
+        score: result.score,
+        gaps: result.gaps,
+      }
+      // 根据真实评分更新雷达图数据（近似映射）
+      radarData[0] = result.score > 0 ? Math.min(100, result.score + 5) : radarData[0]
+      radarData[1] = result.gaps.filter(g => g.priority === 'high').length > 0 ? 55 : radarData[1]
+    } catch (err) {
+      console.error('诊断 API 调用失败，使用模拟数据：', err)
+      // 保持 mock 数据不变
+    } finally {
+      isDiagnosing.value = false
+    }
+  } else if (queryScore !== null) {
+    // 有路由评分参数但无 AI，使用传入的分数更新显示
+    diagnosis.value.score = queryScore
+  }
 })
 </script>

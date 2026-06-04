@@ -79,25 +79,46 @@
       </div>
 
       <!-- AI 追问面板 -->
-      <div class="bg-yellow-50 rounded-2xl p-5">
-        <div class="flex items-center gap-2 mb-2">
+      <div v-if="aiResult?.followUpQuestions?.length" class="bg-yellow-50 rounded-2xl p-5">
+        <div class="flex items-center gap-2 mb-3">
           <MessageCircleQuestion :size="16" class="text-orange-500" />
           <span class="text-sm font-semibold text-orange-700">AI 追问</span>
         </div>
-        <p class="text-sm text-slate-700 leading-relaxed">
-          如果没有终止条件，会发生什么？
-        </p>
+        <ul class="space-y-2">
+          <li
+            v-for="(q, idx) in aiResult.followUpQuestions"
+            :key="idx"
+            class="text-sm text-slate-700 leading-relaxed pl-4 -indent-4"
+          >
+            {{ q }}
+          </li>
+        </ul>
       </div>
+
+      <!-- 提交讲解按钮 -->
+      <button
+        class="w-full py-3.5 rounded-full bg-[#4F6EF7] text-white text-base font-semibold shadow-lg shadow-blue-500/25 active:scale-[0.98] transition-transform duration-150 flex items-center justify-center gap-2 disabled:opacity-50 disabled:active:scale-100"
+        :disabled="isScoring || !editorContent.trim()"
+        @click="handleSubmitScore"
+      >
+        <svg v-if="isScoring || isLoading" class="animate-spin h-5 w-5" viewBox="0 0 24 24" fill="none">
+          <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="3" opacity="0.25"/>
+          <path d="M4 12a8 8 0 018-8" stroke="currentColor" stroke-width="3" stroke-linecap="round"/>
+        </svg>
+        {{ isScoring ? '评分中...' : '提交讲解并评分' }}
+      </button>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRouter, useRoute } from 'vue-router'
 import { MessageCircleQuestion } from 'lucide-vue-next'
+import { scoreExplanation, optimizeExplanation, isAIReady, isLoading } from '@/composables/useDeepSeek'
 
 const router = useRouter()
+const route = useRoute()
 
 const currentStep = ref(2)
 const totalSteps = ref(5)
@@ -106,6 +127,16 @@ const stepLabels = ['选题', '讲解', '录音', '诊断', '复习']
 
 const editorRef = ref<HTMLDivElement>()
 const editorContent = ref('')
+
+// AI 相关状态
+const aiResult = ref<{
+  score: number
+  clarity: number
+  gaps: string[]
+  followUpQuestions: string[]
+  feedback: string
+} | null>(null)
+const isScoring = ref(false)
 
 const toolbarTools = [
   { icon: 'B', label: '加粗', action: 'bold' },
@@ -155,12 +186,53 @@ function handleTool(action: string) {
         alert('请先写一些内容，AI 将帮你优化表达')
         return
       }
-      // 在编辑器末尾追加 AI 建议
-      const suggestion = '\n\n💡 AI 建议：可以尝试用生活中的例子（如俄罗斯套娃、镜子反射）来类比解释，让听众更容易理解。'
-      el.innerText += suggestion
-      editorContent.value = el.innerText
+      if (isAIReady.value) {
+        // 调用真实 API 优化内容
+        optimizeExplanation(editorContent.value).then((result) => {
+          const el = editorRef.value
+          if (el) {
+            editorContent.value = result.optimized
+            el.innerText = result.optimized
+          }
+          alert('✅ ' + result.suggestion)
+        }).catch((err) => {
+          alert('AI 优化失败：' + (err instanceof Error ? err.message : '未知错误'))
+        })
+      } else {
+        // 降级：追加静态建议
+        const suggestion = '\n\n💡 AI 建议：可以尝试用生活中的例子（如俄罗斯套娃、镜子反射）来类比解释，让听众更容易理解。'
+        const el = editorRef.value
+        if (el) {
+          el.innerText += suggestion
+          editorContent.value = el.innerText
+        }
+      }
       break
     }
+  }
+}
+
+async function handleSubmitScore() {
+  if (!editorContent.value.trim()) return
+
+  isScoring.value = true
+  try {
+    const topic = '递归' // 可从路由参数或上下文获取
+    const result = await scoreExplanation(editorContent.value, topic)
+    aiResult.value = result
+    // 将评分数据通过 query params 传递到诊断页
+    router.push({
+      path: '/explain/new/diagnosis',
+      query: {
+        score: String(result.score),
+        content: encodeURIComponent(editorContent.value),
+        topic: encodeURIComponent(topic),
+      },
+    })
+  } catch (err) {
+    alert('评分失败：' + (err instanceof Error ? err.message : '未知错误'))
+  } finally {
+    isScoring.value = false
   }
 }
 </script>

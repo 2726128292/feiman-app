@@ -86,10 +86,15 @@
 
       <!-- CTA 按钮 -->
       <button
-        class="w-full py-3.5 rounded-full bg-[#4F6EF7] text-white text-base font-semibold shadow-lg shadow-blue-500/25 active:scale-[0.98] transition-transform duration-150"
+        class="w-full py-3.5 rounded-full bg-[#4F6EF7] text-white text-base font-semibold shadow-lg shadow-blue-500/25 active:scale-[0.98] transition-transform duration-150 flex items-center justify-center gap-2 disabled:opacity-50 disabled:active:scale-100"
+        :disabled="isGenerating || isLoading"
         @click="handleGenerate"
       >
-        生成学习路径
+        <svg v-if="isGenerating || isLoading" class="animate-spin h-5 w-5" viewBox="0 0 24 24" fill="none">
+          <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="3" opacity="0.25"/>
+          <path d="M4 12a8 8 0 018-8" stroke="currentColor" stroke-width="3" stroke-linecap="round"/>
+        </svg>
+        {{ isGenerating ? 'AI 生成中...' : '生成学习路径' }}
       </button>
     </div>
   </div>
@@ -99,6 +104,7 @@
 import { reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { ArrowLeft, Sparkles } from 'lucide-vue-next'
+import { generateLearningPath, isAIReady, isLoading } from '@/composables/useDeepSeek'
 
 const router = useRouter()
 
@@ -109,6 +115,13 @@ const form = reactive({
 })
 
 const selectedPrefs = ref<string[]>(['beginner'])
+const isGenerating = ref(false)
+const generatedPath = ref<null | {
+  title: string
+  chapters: { title: string; description: string; days: number }[]
+  dailyTasks: string[]
+  suggestions: string
+}>(null)
 
 const preferences = [
   {
@@ -142,8 +155,47 @@ function togglePref(key: string) {
   }
 }
 
-function handleGenerate() {
-  // TODO: 调用 AI 生成逻辑后跳转
-  router.push('/paths')
+async function handleGenerate() {
+  // 表单校验
+  if (!form.goalName.trim()) {
+    alert('请填写目标名称')
+    return
+  }
+  if (!form.currentLevel.trim()) {
+    alert('请填写当前水平')
+    return
+  }
+  if (!form.timeCommitment.trim()) {
+    alert('请填写预计投入时间')
+    return
+  }
+
+  // 获取偏好标签的中文显示名
+  const prefLabels = selectedPrefs.value.map(key => {
+    const found = preferences.find(p => p.key === key)
+    return found ? found.label : key
+  })
+
+  if (isAIReady.value) {
+    isGenerating.value = true
+    try {
+      generatedPath.value = await generateLearningPath(
+        form.goalName,
+        form.currentLevel,
+        form.timeCommitment,
+        prefLabels
+      )
+      alert('✅ 学习路径生成成功！共 ' + generatedPath.value.chapters.length + ' 个章节')
+      router.push('/paths')
+    } catch (err) {
+      alert('AI 生成失败：' + (err instanceof Error ? err.message : '未知错误'))
+    } finally {
+      isGenerating.value = false
+    }
+  } else {
+    // 降级：未配置 API Key 时使用模拟行为
+    alert('请先配置 API Key 或使用本地模拟模式')
+    router.push('/paths')
+  }
 }
 </script>
