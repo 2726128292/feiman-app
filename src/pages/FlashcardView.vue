@@ -1,6 +1,18 @@
 <template>
-  <div class="min-h-screen bg-slate-50 pb-24">
+  <div ref="refreshContainer" class="min-h-screen bg-slate-50 pb-24">
     <div class="max-w-md mx-auto px-5 pt-6 space-y-4">
+      <!-- 下拉刷新指示器 -->
+      <div
+        v-if="isPulling || isRefreshing"
+        class="flex items-center justify-center py-3 text-xs text-slate-400"
+        :style="{ transform: `translateY(${Math.min(pullDistance, 80)}px)` }"
+      >
+        <svg v-if="isRefreshing" class="animate-spin h-4 w-4 mr-1.5" viewBox="0 0 24 24" fill="none">
+          <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="3" opacity="0.25"/>
+          <path d="M4 12a8 8 0 018-8" stroke="currentColor" stroke-width="3" stroke-linecap="round"/>
+        </svg>
+        <span>{{ isRefreshing ? '正在刷新...' : pullDistance >= 80 ? '释放立即刷新' : '下拉刷新' }}</span>
+      </div>
 
       <!-- 模式切换：选择模式 / 复习模式 -->
       <div v-if="mode === 'select'" class="space-y-4">
@@ -283,11 +295,24 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, reactive, onMounted } from 'vue'
+import { ref, computed, reactive, onMounted, inject } from 'vue'
 import { mockCards } from '@/utils/mock'
 import { updateSM2, type SM2Params } from '@/composables/useSpacedRepetition'
 import type { ReviewCard } from '@/types/card'
 import { Check, Upload, ChevronLeft, ChevronRight, Plus } from 'lucide-vue-next'
+import { usePullRefresh } from '@/composables/usePullRefresh'
+
+// 下拉刷新
+const refreshContainerRef = ref<HTMLElement>()
+const { isPulling, isRefreshing, pullDistance, init } = usePullRefresh({
+  onRefresh: () => {
+    // 从 localStorage 重新加载卡片数据
+    loadCardsFromStorage()
+  },
+})
+
+// 注入全局 Toast
+const showToast = inject<(message: string, type?: 'success' | 'error' | 'info' | 'warning', duration?: number) => void>('toast')!
 
 // ====== 模式状态 ======
 type Mode = 'select' | 'review'
@@ -596,7 +621,7 @@ function nextCard() {
   if (currentIndex.value < reviewCards.value.length - 1) {
     currentIndex.value++
   } else {
-    alert(`🎉 复习完成！共 ${reviewedCount} 张卡片`)
+    showToast(`复习完成！共 ${reviewedCount} 张卡片`, 'success')
     backToSelect()
   }
 }
@@ -615,9 +640,31 @@ function skipCard() {
   }
 }
 
-// 初始化加载错题本
+// 从 localStorage 重新加载卡片数据（用于下拉刷新）
+function loadCardsFromStorage() {
+  try {
+    const cardsRaw = localStorage.getItem('feiman_cards')
+    if (cardsRaw) {
+      const stored = JSON.parse(cardsRaw)
+      if (Array.isArray(stored) && stored.length > 0) {
+        // 合并去重：以存储的数据为准，保留 mock 中不存在的
+        const storedIds = new Set(stored.map((c: any) => c.id))
+        // 保留不在存储中的 mock 卡片
+        const remainingMock = mockCards.filter((c: ReviewCard) => !storedIds.has(c.id))
+        allCards.value = [...stored, ...remainingMock]
+      }
+    }
+  } catch {
+    // 解析失败时保持当前数据
+  }
+}
+
+// 初始化加载错题本 + 下拉刷新绑定
 onMounted(() => {
   loadWrongBook()
+  if (refreshContainerRef.value) {
+    init(refreshContainerRef.value)
+  }
 })
 </script>
 

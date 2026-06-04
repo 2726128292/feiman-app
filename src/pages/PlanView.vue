@@ -15,6 +15,36 @@
         @mode-change="onModeChange"
       />
 
+      <!-- 今日学习摘要卡片 -->
+      <div class="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-2xl p-4 border border-blue-100">
+        <div class="flex items-center justify-between mb-3">
+          <h3 class="text-sm font-semibold text-slate-700">今日学习摘要</h3>
+          <span class="text-xs text-blue-500">{{ todayDate }}</span>
+        </div>
+        <div class="grid grid-cols-4 gap-2">
+          <!-- 讲解次数 -->
+          <div class="bg-white rounded-xl p-2.5 text-center shadow-sm">
+            <p class="text-lg font-bold text-[#4F6EF7]">{{ todayStats.explainCount }}</p>
+            <p class="text-[10px] text-slate-400 mt-0.5 leading-tight">讲解次数</p>
+          </div>
+          <!-- 复习卡数 -->
+          <div class="bg-white rounded-xl p-2.5 text-center shadow-sm">
+            <p class="text-lg font-bold text-emerald-500">{{ todayStats.reviewCards }}</p>
+            <p class="text-[10px] text-slate-400 mt-0.5 leading-tight">复习卡数</p>
+          </div>
+          <!-- 专注时长 -->
+          <div class="bg-white rounded-xl p-2.5 text-center shadow-sm">
+            <p class="text-lg font-bold text-amber-500">{{ todayStats.focusMinutes }}<span class="text-[10px] font-normal">分</span></p>
+            <p class="text-[10px] text-slate-400 mt-0.5 leading-tight">专注时长</p>
+          </div>
+          <!-- 连续天数 -->
+          <div class="bg-white rounded-xl p-2.5 text-center shadow-sm">
+            <p class="text-lg font-bold text-purple-500">{{ todayStats.streakDays }}</p>
+            <p class="text-[10px] text-slate-400 mt-0.5 leading-tight">连续天数</p>
+          </div>
+        </div>
+      </div>
+
       <!-- 周历头部 -->
       <div class="space-y-2">
         <!-- 星期行 -->
@@ -75,7 +105,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, type Ref } from 'vue'
+import { ref, computed, type Ref } from 'vue'
 import { mockDailyPlans } from '@/utils/mock'
 import type { PlanTask } from '@/types/plan'
 import PomodoroTimer from '@/components/common/PomodoroTimer.vue'
@@ -155,4 +185,98 @@ function onModeChange(mode: string): void {
   // 可用于记录模式切换日志等
   console.log(`番茄钟切换到模式: ${mode}`)
 }
+
+// ==================== 今日学习摘要 ====================
+
+/** 今日日期格式化显示（如 "6月4日 周三"） */
+const todayDate = computed(() => {
+  const now = new Date()
+  const month = now.getMonth() + 1
+  const day = now.getDate()
+  const weekDays = ['周日', '周一', '周二', '周三', '周四', '周五', '周六']
+  const weekDay = weekDays[now.getDay()]
+  return `${month}月${day}日 ${weekDay}`
+})
+
+/** 获取今天的日期字符串（YYYY-MM-DD 格式，用于比较） */
+function getTodayDateString(): string {
+  const now = new Date()
+  const year = now.getFullYear()
+  const month = String(now.getMonth() + 1).padStart(2, '0')
+  const day = String(now.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
+}
+
+/**
+ * 从 localStorage 统计今日学习数据
+ * 包含：讲解次数、复习卡数、专注时长、连续天数
+ */
+const todayStats = computed(() => {
+  const today = getTodayDateString()
+
+  // 1. 讲解次数：统计 feiman_sessions 中今天创建的记录数
+  let explainCount = 0
+  try {
+    const sessionsData = localStorage.getItem('feiman_sessions')
+    if (sessionsData) {
+      const sessions = JSON.parse(sessionsData)
+      if (Array.isArray(sessions)) {
+        // 假设 session 有 createdAt 或 created_at 字段包含日期信息
+        // 如果没有日期字段，则统计所有记录（降级处理）
+        explainCount = sessions.filter((s: any) => {
+          const createdAt = s.createdAt || s.created_at || s.date
+          return createdAt && createdAt.toString().startsWith(today)
+        }).length
+      }
+    }
+  } catch {
+    // JSON 解析失败时忽略
+  }
+
+  // 2. 复习卡数：从 feiman_daily_stats 读取今日复习数量
+  let reviewCards = 0
+  try {
+    const dailyStatsData = localStorage.getItem('feiman_daily_stats')
+    if (dailyStatsData) {
+      const dailyStats = JSON.parse(dailyStatsData)
+      // dailyStats 可以是对象或数组，查找今天的记录
+      if (Array.isArray(dailyStats)) {
+        const todayStat = dailyStats.find((s: any) => s.date === today)
+        reviewCards = todayStat?.reviewCount || 0
+      } else if (dailyStats.date === today) {
+        reviewCards = dailyStats.reviewCount || 0
+      } else if (dailyStats[today]) {
+        reviewCards = dailyStats[today].reviewCount || 0
+      }
+    }
+  } catch {
+    // JSON 解析失败时忽略
+  }
+
+  // 3. 专注时长：基于番茄钟完成次数 × 25分钟
+  let focusMinutes = 0
+  try {
+    const pomodoroCount = localStorage.getItem('feiman_pomodoro_count')
+    if (pomodoroCount) {
+      const count = parseInt(pomodoroCount, 10)
+      focusMinutes = isNaN(count) ? 0 : count * 25
+    }
+  } catch {
+    // 解析失败时默认为0
+  }
+
+  // 4. 连续天数：从 feiman_streak_days 读取
+  let streakDays = 1 // 默认值
+  try {
+    const streakData = localStorage.getItem('feiman_streak_days')
+    if (streakData) {
+      const days = parseInt(streakData, 10)
+      streakDays = isNaN(days) ? 1 : days
+    }
+  } catch {
+    // 解析失败时使用默认值
+  }
+
+  return { explainCount, reviewCards, focusMinutes, streakDays }
+})
 </script>

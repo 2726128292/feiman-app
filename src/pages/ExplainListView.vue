@@ -1,16 +1,71 @@
 <template>
-  <div class="min-h-screen bg-slate-50 pb-24">
+  <div ref="refreshContainer" class="min-h-screen bg-slate-50 pb-24">
     <div class="max-w-md mx-auto px-5 pt-6 space-y-4">
+      <!-- 下拉刷新指示器 -->
+      <div
+        v-if="isPulling || isRefreshing"
+        class="flex items-center justify-center py-3 text-xs text-slate-400"
+        :style="{ transform: `translateY(${Math.min(pullDistance, 80)}px)` }"
+      >
+        <svg v-if="isRefreshing" class="animate-spin h-4 w-4 mr-1.5" viewBox="0 0 24 24" fill="none">
+          <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="3" opacity="0.25"/>
+          <path d="M4 12a8 8 0 018-8" stroke="currentColor" stroke-width="3" stroke-linecap="round"/>
+        </svg>
+        <span>{{ isRefreshing ? '正在刷新...' : pullDistance >= 80 ? '释放立即刷新' : '下拉刷新' }}</span>
+      </div>
+
       <!-- 顶部标题区 -->
       <div>
         <h1 class="text-2xl font-bold text-slate-900">讲解记录</h1>
         <p class="text-sm text-slate-500 mt-0.5">历史讲解回顾</p>
       </div>
 
+      <!-- 搜索框 -->
+      <div class="relative">
+        <Search
+          :size="16"
+          class="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none"
+        />
+        <input
+          v-model="searchKeyword"
+          type="text"
+          placeholder="搜索主题名..."
+          class="w-full pl-9 pr-4 py-2.5 bg-white rounded-xl shadow-sm border border-slate-100 text-sm text-slate-700 placeholder:text-slate-300 focus:outline-none focus:border-[#4F6EF7] focus:ring-1 focus:ring-[#4F6EF7]/20 transition-colors"
+        />
+      </div>
+
+      <!-- 排序按钮组 -->
+      <div class="flex items-center gap-2">
+        <button
+          class="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-colors"
+          :class="
+            sortMode === 'time'
+              ? 'bg-[#4F6EF7] text-white'
+              : 'bg-white text-slate-500 shadow-sm active:bg-slate-50'
+          "
+          @click="sortMode = 'time'"
+        >
+          <Clock :size="12" />
+          时间
+        </button>
+        <button
+          class="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-colors"
+          :class="
+            sortMode === 'score'
+              ? 'bg-[#4F6EF7] text-white'
+              : 'bg-white text-slate-500 shadow-sm active:bg-slate-50'
+          "
+          @click="sortMode = 'score'"
+        >
+          <BarChart3 :size="12" />
+          分数
+        </button>
+      </div>
+
       <!-- 统计概览条 -->
       <div class="flex gap-3">
         <div class="flex-1 bg-white rounded-2xl shadow-sm p-3 text-center">
-          <p class="text-xl font-bold text-[#4F6EF7]">{{ sessions.length }}</p>
+          <p class="text-xl font-bold text-[#4F6EF7]">{{ filteredSessions.length }}</p>
           <p class="text-[11px] text-slate-400">总记录</p>
         </div>
         <div class="flex-1 bg-white rounded-2xl shadow-sm p-3 text-center">
@@ -24,12 +79,15 @@
       </div>
 
       <!-- 讲解记录列表 -->
-      <div class="space-y-3">
+      <div v-if="filteredSessions.length > 0" class="space-y-3">
         <div
-          v-for="session in sessions"
+          v-for="session in filteredSessions"
           :key="session.id"
-          class="bg-white rounded-2xl shadow-sm p-4 cursor-pointer active:scale-[0.98] transition-transform duration-150"
-          @click="router.push(`/explain/${session.id}`)"
+          class="bg-white rounded-2xl shadow-sm p-4 cursor-pointer active:scale-[0.98] transition-transform duration-150 relative"
+          @click="handleClick(session)"
+          @touchstart="onTouchStart($event, session)"
+          @touchend="onTouchEnd($event, session)"
+          @touchmove="onTouchMove"
         >
           <div class="flex items-start justify-between gap-3">
             <div class="flex-1 min-w-0">
@@ -40,11 +98,11 @@
                   :size="14"
                   :class="session.type === 'voice' ? 'text-purple-500' : 'text-blue-500'"
                 />
-                <h3 class="text-sm font-semibold text-slate-800 truncate">{{ session.topic }}</h3>
+                <h3 class="text-sm font-semibold text-slate-800 truncate">{{ session.topicName }}</h3>
               </div>
 
               <!-- 日期 -->
-              <p class="text-xs text-slate-400">{{ session.date }}</p>
+              <p class="text-xs text-slate-400">{{ formatDate(session.createdAt) }}</p>
             </div>
 
             <!-- 分数 -->
@@ -68,69 +126,362 @@
         <p class="text-sm text-slate-400">还没有讲解记录</p>
         <p class="text-xs text-slate-300 mt-1">开始你的第一次费曼讲解吧</p>
       </div>
+
+      <!-- 搜索无结果提示 -->
+      <div v-if="sessions.length > 0 && filteredSessions.length === 0" class="text-center py-16">
+        <Search :size="48" class="mx-auto text-slate-200 mb-3" />
+        <p class="text-sm text-slate-400">未找到匹配的记录</p>
+        <p class="text-xs text-slate-300 mt-1">试试其他关键词</p>
+      </div>
+
+      <!-- 长按弹出菜单（操作浮层） -->
+      <Teleport to="body">
+        <div
+          v-if="showMenu && menuSession"
+          class="fixed inset-0 z-50 bg-black/30 flex items-end justify-center"
+          @click="closeMenu"
+          @touchstart.prevent="closeMenu"
+        >
+          <div
+            class="w-full max-w-md bg-white rounded-t-2xl p-4 pb-8 space-y-1 animate-slide-up"
+            @click.stop
+            @touchstart.stop
+          >
+            <div class="w-10 h-1 bg-slate-200 rounded-full mx-auto mb-4" />
+            <p class="text-sm font-semibold text-slate-800 px-2 mb-2 truncate">{{ menuSession.topicName }}</p>
+            <button
+              class="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm text-slate-700 active:bg-slate-50 transition-colors"
+              @click="viewDetail(menuSession)"
+            >
+              <Eye :size="18" class="text-[#4F6EF7]" />
+              查看详情
+            </button>
+            <button
+              class="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm text-red-500 active:bg-red-50 transition-colors"
+              @click="confirmDelete(menuSession)"
+            >
+              <Trash2 :size="18" />
+              删除记录
+            </button>
+            <button
+              class="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-xl text-sm text-slate-400 active:bg-slate-50 transition-colors mt-2"
+              @click="closeMenu"
+            >
+              取消
+            </button>
+          </div>
+        </div>
+      </Teleport>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
+import { ref, computed, watch, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
-import { Mic, FileText, BookOpen } from 'lucide-vue-next'
+import {
+  Mic,
+  FileText,
+  BookOpen,
+  Search,
+  Clock,
+  BarChart3,
+  Eye,
+  Trash2,
+} from 'lucide-vue-next'
+import type { FeynmanSession } from '@/types'
+import { usePullRefresh } from '@/composables/usePullRefresh'
 
 const router = useRouter()
 
-const sessions = [
-  {
-    id: 'sess-001',
-    topic: 'JavaScript 事件循环机制',
-    date: '2026-06-03 14:30',
-    score: 91,
-    type: 'text' as const,
+// 下拉刷新
+const refreshContainerRef = ref<HTMLElement>()
+const { isPulling, isRefreshing, pullDistance, init } = usePullRefresh({
+  onRefresh: () => {
+    // 重新从 localStorage 加载讲解记录
+    sessions.value = loadSessions()
   },
-  {
-    id: 'sess-002',
-    topic: 'HTTP 缓存策略详解',
-    date: '2026-06-02 20:15',
-    score: 85,
-    type: 'voice' as const,
-  },
-  {
-    id: 'sess-003',
-    topic: 'Vue 3 响应式原理',
-    date: '2026-06-01 09:45',
-    score: 78,
-    type: 'text' as const,
-  },
-  {
-    id: 'sess-004',
-    topic: 'CSS Grid 布局实战',
-    date: '2026-05-31 16:20',
-    score: 92,
-    type: 'voice' as const,
-  },
-  {
-    id: 'sess-005',
-    topic: 'TypeScript 泛型深入',
-    date: '2026-05-30 11:00',
-    score: 73,
-    type: 'text' as const,
-  },
-]
-
-const avgScore = computed(() => {
-  if (sessions.length === 0) return 0
-  const sum = sessions.reduce((acc, s) => acc + s.score, 0)
-  return Math.round(sum / sessions.length)
 })
 
-const voiceCount = computed(() =>
-  sessions.filter((s) => s.type === 'voice').length
+// ==================== 类型定义 ====================
+
+/** 展示用的会话数据（兼容旧格式） */
+interface DisplaySession {
+  id: string
+  topicId: string
+  topicName: string
+  content: string
+  score: number
+  type: 'text' | 'voice'
+  createdAt: string
+}
+
+// ==================== 状态 ====================
+
+/** 搜索关键词 */
+const searchKeyword = ref('')
+
+/** 排序模式：time=时间倒序，score=分数从高到低 */
+const sortMode = ref<'time' | 'score'>('time')
+
+/** 长按菜单是否显示 */
+const showMenu = ref(false)
+
+/** 当前长按选中的会话 */
+const menuSession = ref<DisplaySession | null>(null)
+
+/** 长按计时相关 */
+let touchStartTime = 0
+let touchTimer: ReturnType<typeof setTimeout> | null = null
+let isLongPress = false
+
+// ==================== 数据读取与转换 ====================
+
+/**
+ * 从 localStorage 读取 feiman_sessions 并转换为展示格式
+ * 兼容旧数据：缺少字段时使用默认值
+ */
+function loadSessions(): DisplaySession[] {
+  try {
+    const raw = localStorage.getItem('feiman_sessions')
+    if (!raw) return []
+
+    const parsed: unknown[] = JSON.parse(raw)
+
+    return parsed.map((item): DisplaySession => {
+      // 兼容 FeynmanSession 标准格式
+      const session = item as Record<string, unknown>
+      return {
+        id: (session.id as string) || '',
+        topicId: (session.topicId as string) || '',
+        topicName: resolveTopicName(session),
+        content: (session.content as string) || '',
+        score: typeof session.score === 'number' ? session.score : 0,
+        type: (session.type === 'voice' ? 'voice' : 'text') as 'text' | 'voice',
+        createdAt: (session.createdAt as string) || new Date().toISOString(),
+      }
+    })
+  } catch {
+    return []
+  }
+}
+
+/**
+ * 解析主题名称：
+ * - 尝试从 feiman_topics 中根据 topicId 匹配 title
+ * - 找不到则截取 content 前 20 字作为 fallback
+ * - 再不行显示"未知主题"
+ */
+function resolveTopicName(session: Record<string, unknown>): string {
+  // 旧数据可能直接有 topic 字段
+  if ((session as Record<string, unknown>).topic) {
+    return String((session as Record<string, unknown>).topic)
+  }
+
+  const topicId = session.topicId as string | undefined
+  if (topicId) {
+    try {
+      const topicsRaw = localStorage.getItem('feiman_topics')
+      if (topicsRaw) {
+        const topics: Array<{ id: string; title: string }> = JSON.parse(topicsRaw)
+        const found = topics.find((t) => t.id === topicId)
+        if (found) return found.title
+      }
+    } catch {
+      // 忽略解析错误
+    }
+  }
+
+  // 从内容中提取前20字作为主题名
+  const content = session.content as string | undefined
+  if (content && content.trim()) {
+    return content.trim().slice(0, 20) + (content.length > 20 ? '...' : '')
+  }
+
+  return '未知主题'
+}
+
+/** 原始会话列表 */
+const sessions = ref<DisplaySession[]>(loadSessions())
+
+// 监听 localStorage 变化（跨标签页同步）
+watch(
+  () => localStorage.getItem('feiman_sessions'),
+  () => {
+    sessions.value = loadSessions()
+  }
 )
 
+// ==================== 计算属性 ====================
+
+/** 过滤+排序后的列表 */
+const filteredSessions = computed(() => {
+  let list = [...sessions.value]
+
+  // 搜索过滤
+  if (searchKeyword.value.trim()) {
+    const keyword = searchKeyword.value.trim().toLowerCase()
+    list = list.filter((s) => s.topicName.toLowerCase().includes(keyword))
+  }
+
+  // 排序
+  if (sortMode.value === 'time') {
+    // 时间倒序（最新的在前）
+    list.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+  } else {
+    // 分数从高到低
+    list.sort((a, b) => b.score - a.score)
+  }
+
+  return list
+})
+
+/** 平均分 */
+const avgScore = computed(() => {
+  if (filteredSessions.value.length === 0) return 0
+  const sum = filteredSessions.value.reduce((acc, s) => acc + s.score, 0)
+  return Math.round(sum / filteredSessions.value.length)
+})
+
+/** 语音讲解数量 */
+const voiceCount = computed(() =>
+  filteredSessions.value.filter((s) => s.type === 'voice').length
+)
+
+// ==================== 工具函数 ====================
+
+/** 格式化日期显示 */
+function formatDate(isoString: string): string {
+  try {
+    const date = new Date(isoString)
+    const y = date.getFullYear()
+    const m = String(date.getMonth() + 1).padStart(2, '0')
+    const d = String(date.getDate()).padStart(2, '0')
+    const hh = String(date.getHours()).padStart(2, '0')
+    const mm = String(date.getMinutes()).padStart(2, '0')
+    return `${y}-${m}-${d} ${hh}:${mm}`
+  } catch {
+    return isoString
+  }
+}
+
+/** 根据分数返回颜色 */
 function getScoreColor(score: number): string {
   if (score >= 90) return '#10B981'
   if (score >= 75) return '#4F6EF7'
   if (score >= 60) return '#F59E0B'
   return '#EF4444'
 }
+
+// ==================== 交互事件 ====================
+
+/** 点击跳转到新讲解页 */
+function handleClick(session: DisplaySession) {
+  // 如果刚触发过长按，忽略本次点击
+  if (isLongPress) {
+    isLongPress = false
+    return
+  }
+  router.push('/explain/new')
+}
+
+/** 触摸开始 - 记录时间并启动长按检测 */
+function onTouchStart(event: TouchEvent, session: DisplaySession) {
+  touchStartTime = Date.now()
+  isLongPress = false
+
+  // 超过 500ms 判定为长按
+  touchTimer = setTimeout(() => {
+    isLongPress = true
+    menuSession.value = session
+    showMenu.value = true
+  }, 500)
+}
+
+/** 触摸结束 - 清除计时器 */
+function onTouchEnd(_event: TouchEvent, _session: DisplaySession) {
+  if (touchTimer) {
+    clearTimeout(touchTimer)
+    touchTimer = null
+  }
+}
+
+/** 触摸移动 - 取消长按（用户在滑动） */
+function onTouchMove() {
+  if (touchTimer) {
+    clearTimeout(touchTimer)
+    touchTimer = null
+  }
+}
+
+/** 关闭长按菜单 */
+function closeMenu() {
+  showMenu.value = false
+  menuSession.value = null
+}
+
+/** 查看详情 - 跳转到新讲解页（暂无单独详情页） */
+function viewDetail(session: DisplaySession) {
+  closeMenu()
+  router.push('/explain/new')
+}
+
+/** 删除确认并执行删除 */
+function confirmDelete(session: DisplaySession) {
+  closeMenu()
+  const confirmed = window.confirm(`确定要删除「${session.topicName}」这条讲解记录吗？`)
+  if (!confirmed) return
+
+  // 从列表中移除
+  const idx = sessions.value.findIndex((s) => s.id === session.id)
+  if (idx !== -1) {
+    sessions.value.splice(idx, 1)
+  }
+
+  // 同步回 localStorage
+  saveToStorage()
+}
+
+/** 将当前会话列表写回 localStorage */
+function saveToStorage(): void {
+  try {
+    // 只保留核心字段写回，保持与 FeynmanSession 结构一致
+    const rawData = sessions.value.map((s) => ({
+      id: s.id,
+      topicId: s.topicId,
+      content: s.content,
+      score: s.score,
+      type: s.type,
+      createdAt: s.createdAt,
+    }))
+    localStorage.setItem('feiman_sessions', JSON.stringify(rawData))
+  } catch {
+    // 写入失败时静默处理
+  }
+}
+
+// 初始化下拉刷新绑定
+onMounted(() => {
+  if (refreshContainerRef.value) {
+    init(refreshContainerRef.value)
+  }
+})
 </script>
+
+<style scoped>
+/* 底部弹出动画 */
+@keyframes slide-up {
+  from {
+    transform: translateY(100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+.animate-slide-up {
+  animation: slide-up 0.25s ease-out;
+}
+</style>

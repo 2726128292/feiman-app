@@ -82,6 +82,7 @@
           class="min-h-[140px] w-full p-3.5 rounded-xl border border-slate-200 text-sm text-slate-800 leading-relaxed focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 transition-all empty:before:content-[attr(data-placeholder)] empty:before:text-slate-400"
           data-placeholder="在这里写下你的讲解，就像在教一个完全不懂的朋友..."
           @input="onEditorInput"
+          @keydown="handleKeyboard"
         >{{ editorContent }}</div>
 
         <!-- 工具栏 -->
@@ -195,6 +196,14 @@
             @click="saveSession"
           >保存本次讲解</button>
         </div>
+        <!-- 分享按钮 -->
+        <button
+          class="w-full px-4 py-3 rounded-full border-2 border-emerald-200 text-emerald-600 text-sm font-medium active:bg-emerald-50 transition-colors flex items-center justify-center gap-1.5"
+          @click="handleShare"
+        >
+          <Share2 :size="16" />
+          分享成果
+        </button>
       </div>
 
       <!-- 提交讲解按钮 (未评分时显示) -->
@@ -216,12 +225,19 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted, inject } from 'vue'
 import { useRouter } from 'vue-router'
-import { MessageCircleQuestion } from 'lucide-vue-next'
+import { MessageCircleQuestion, Share2 } from 'lucide-vue-next'
 import { optimizeExplanation, isAIReady } from '@/composables/useDeepSeek'
+import { useShare } from '@/composables/useShare'
 
 const router = useRouter()
+
+// 注入全局 Toast
+const showToast = inject<(message: string, type?: 'success' | 'error' | 'info' | 'warning', duration?: number) => void>('toast')!
+
+// 分享功能
+const { shareExplanation } = useShare()
 
 const currentStep = ref(2)
 const totalSteps = ref(5)
@@ -326,14 +342,14 @@ function handleTool(action: string) {
       break
     }
     case 'image':
-      alert('图片插入功能：可粘贴图片URL或使用剪贴板')
+      showToast('图片插入功能：可粘贴图片URL或使用剪贴板', 'info')
       break
     case 'record':
       router.push('/explain/new/voice')
       break
     case 'ai': {
       if (!editorContent.value.trim()) {
-        alert('请先写一些内容，再使用AI辅助优化')
+        showToast('请先写一些内容，再使用AI辅助优化', 'warning')
         return
       }
       if (isAIReady.value) {
@@ -345,7 +361,7 @@ function handleTool(action: string) {
           // 清除之前的评分结果，让用户重新提交
           scoreResult.value = null
         }).catch(() => {
-          alert('AI 优化失败，请稍后重试')
+          showToast('AI 优化失败，请稍后重试', 'error')
         })
       } else {
         const suggestion = '\n\n💡 建议：尝试用生活中的例子来类比解释，比如俄罗斯套娃、镜子反射等。'
@@ -547,6 +563,39 @@ function continueEditing() {
   editorRef.value?.focus()
 }
 
+// 分享讲解成果
+async function handleShare() {
+  if (!scoreResult.value) return
+  await shareExplanation({
+    topic: selectedTopic.value,
+    score: scoreResult.value.score,
+    summary: scoreResult.value.feedback,
+  })
+}
+
+// 键盘快捷键
+function handleKeyboard(e: KeyboardEvent) {
+  // Ctrl/Cmd + B: 加粗
+  if ((e.ctrlKey || e.metaKey) && e.key === 'b') {
+    e.preventDefault()
+    handleTool('bold')
+  }
+  // Ctrl/Cmd + I: 斜体
+  else if ((e.ctrlKey || e.metaKey) && e.key === 'i') {
+    e.preventDefault()
+    handleTool('italic')
+  }
+  // Ctrl/Cmd + S: 保存（如果有评分结果则保存，否则提交评分）
+  else if ((e.ctrlKey || e.metaKey) && e.key === 's') {
+    e.preventDefault()
+    if (scoreResult.value) {
+      saveSession()
+    } else if (editorContent.value.trim()) {
+      handleSubmitScore()
+    }
+  }
+}
+
 function saveSession() {
   // 保存到 localStorage
   try {
@@ -560,9 +609,9 @@ function saveSession() {
       createdAt: new Date().toISOString(),
     })
     localStorage.setItem('feiman_sessions', JSON.stringify(sessions))
-    alert('✅ 讲解已保存！可在「讲解记录」中查看。')
+    showToast('讲解已保存！可在「讲解记录」中查看。', 'success')
   } catch {
-    alert('保存失败，请重试')
+    showToast('保存失败，请重试', 'error')
   }
 }
 </script>

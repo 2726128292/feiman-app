@@ -13,6 +13,87 @@
         </div>
       </div>
 
+      <!-- 全局搜索栏 -->
+      <div class="relative">
+        <div class="bg-white rounded-2xl shadow-sm px-4 py-3 flex items-center gap-3">
+          <Search :size="18" class="text-slate-400 shrink-0" />
+          <input
+            v-model="searchQuery"
+            type="text"
+            placeholder="搜索主题、闪卡、讲解记录..."
+            class="flex-1 bg-transparent text-sm text-slate-800 placeholder:text-slate-400 outline-none"
+            @focus="showSearchResults = true"
+            @input="onSearchInput"
+          />
+          <button v-if="searchQuery" @click="clearSearch" class="text-slate-400">
+            <X :size="16" />
+          </button>
+        </div>
+
+        <!-- 搜索结果下拉框 -->
+        <div
+          v-if="showSearchResults && searchQuery.length >= 2"
+          class="absolute top-full left-0 right-0 mt-2 bg-white rounded-2xl shadow-lg border border-slate-100 z-50 max-h-[70vh] overflow-y-auto"
+        >
+          <!-- 无结果提示 -->
+          <div v-if="!hasAnySearchResults" class="p-4 text-center text-sm text-slate-400">
+            未找到相关内容
+          </div>
+
+          <!-- 分组结果列表 -->
+          <div v-else>
+            <!-- 主题组 -->
+            <div v-if="searchResults.topicResults.length > 0" class="border-b border-slate-100 last:border-b-0">
+              <div class="px-4 pt-3 pb-1 text-xs font-medium text-slate-400 uppercase tracking-wider">主题</div>
+              <div
+                v-for="(item, idx) in searchResults.topicResults.slice(0, 3)"
+                :key="'topic-' + idx"
+                class="px-4 py-2.5 hover:bg-slate-50 cursor-pointer active:bg-slate-100 transition-colors flex items-center justify-between"
+                @click="navigateToTopic(item.id)"
+              >
+                <span class="text-sm text-slate-700">{{ item.title }}</span>
+                <ChevronRight :size="14" class="text-slate-300" />
+              </div>
+            </div>
+
+            <!-- 闪卡组 -->
+            <div v-if="searchResults.cardResults.length > 0" class="border-b border-slate-100 last:border-b-0">
+              <div class="px-4 pt-3 pb-1 text-xs font-medium text-slate-400 uppercase tracking-wider">闪卡</div>
+              <div
+                v-for="(item, idx) in searchResults.cardResults.slice(0, 3)"
+                :key="'card-' + idx"
+                class="px-4 py-2.5 hover:bg-slate-50 cursor-pointer active:bg-slate-100 transition-colors flex items-center justify-between"
+                @click="router.push('/review/cards')"
+              >
+                <span class="text-sm text-slate-700 truncate max-w-[200px]">{{ item.question || item.answer }}</span>
+                <ChevronRight :size="14" class="text-slate-300 shrink-0" />
+              </div>
+            </div>
+
+            <!-- 讲解记录组 -->
+            <div v-if="searchResults.sessionResults.length > 0">
+              <div class="px-4 pt-3 pb-1 text-xs font-medium text-slate-400 uppercase tracking-wider">讲解记录</div>
+              <div
+                v-for="(item, idx) in searchResults.sessionResults.slice(0, 3)"
+                :key="'session-' + idx"
+                class="px-4 py-2.5 hover:bg-slate-50 cursor-pointer active:bg-slate-100 transition-colors flex items-center justify-between"
+                @click="router.push('/explain/list')"
+              >
+                <span class="text-sm text-slate-700 truncate max-w-[200px]">{{ item.content?.slice(0, 30) || '讲解记录' }}</span>
+                <ChevronRight :size="14" class="text-slate-300 shrink-0" />
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 点击遮罩关闭搜索结果 -->
+        <div
+          v-if="showSearchResults && searchQuery.length >= 2"
+          class="fixed inset-0 z-40"
+          @click="closeSearch"
+        />
+      </div>
+
       <!-- AI 学习教练建议卡片 -->
       <Card variant="gradient-blue" class="p-5 !rounded-2xl">
         <h2 class="text-base font-bold mb-1.5">AI 学习教练建议</h2>
@@ -116,9 +197,9 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { BookOpen, Brain, Target, Route, Network, TrendingUp, Zap, Sparkles } from 'lucide-vue-next'
+import { BookOpen, Brain, Target, Route, Network, TrendingUp, Zap, Sparkles, Search, X, ChevronRight } from 'lucide-vue-next'
 import Card from '@/components/common/Card.vue'
 import { mockDashboardSummary, mockAnalytics } from '@/utils/mock'
 
@@ -224,4 +305,121 @@ const areaPath = computed(() => {
   const lastX = chartPoints.value[chartPoints.value.length - 1]?.x ?? chartWidth
   return `${line} L ${lastX} ${chartHeight} L ${firstX} ${chartHeight} Z`
 })
+
+// ==================== 全局搜索功能 ====================
+
+/** 搜索关键词 */
+const searchQuery = ref('')
+/** 是否显示搜索结果 */
+const showSearchResults = ref(false)
+
+/** 搜索结果类型定义 */
+interface SearchResult {
+  topicResults: Array<{ id: string; title: string }>
+  cardResults: Array<{ question?: string; answer?: string }>
+  sessionResults: Array<{ id: string; content?: string; topicId?: string }>
+}
+
+/** 搜索结果 */
+const searchResults = ref<SearchResult>({
+  topicResults: [],
+  cardResults: [],
+  sessionResults: []
+})
+
+/** 是否有搜索结果 */
+const hasAnySearchResults = computed(() => {
+  const r = searchResults.value
+  return r.topicResults.length > 0 || r.cardResults.length > 0 || r.sessionResults.length > 0
+})
+
+/**
+ * 执行搜索 - 从 localStorage 读取数据并匹配
+ * 最少2个字符触发搜索
+ */
+function onSearchInput(): void {
+  const query = searchQuery.value.trim().toLowerCase()
+
+  // 少于2个字符不触发搜索，清空结果
+  if (query.length < 2) {
+    searchResults.value = { topicResults: [], cardResults: [], sessionResults: [] }
+    return
+  }
+
+  // 从 localStorage 读取数据
+  const topicsData = localStorage.getItem('feiman_topics')
+  const cardsData = localStorage.getItem('feiman_cards') || localStorage.getItem('feiman_review_cards')
+  const sessionsData = localStorage.getItem('feiman_sessions')
+
+  // 搜索主题（按标题和tags）
+  let topicResults: Array<{ id: string; title: string }> = []
+  if (topicsData) {
+    try {
+      const topics = JSON.parse(topicsData)
+      topicResults = (Array.isArray(topics) ? topics : []).filter((t: any) => {
+        const titleMatch = t.title?.toLowerCase().includes(query)
+        const tagsMatch = Array.isArray(t.tags) && t.tags.some((tag: string) =>
+          tag.toLowerCase().includes(query)
+        )
+        return titleMatch || tagsMatch
+      }).map((t: any) => ({ id: t.id, title: t.title }))
+    } catch {
+      // JSON 解析失败时忽略
+    }
+  }
+
+  // 搜索闪卡（按问题和答案）
+  let cardResults: Array<{ question?: string; answer?: string }> = []
+  if (cardsData) {
+    try {
+      const cards = JSON.parse(cardsData)
+      cardResults = (Array.isArray(cards) ? cards : []).filter((c: any) => {
+        const questionMatch = c.question?.toLowerCase().includes(query)
+        const answerMatch = c.answer?.toLowerCase().includes(query)
+        return questionMatch || answerMatch
+      }).slice(0, 3)
+    } catch {
+      // JSON 解析失败时忽略
+    }
+  }
+
+  // 搜索讲解记录（按 topicId 和 content）
+  let sessionResults: Array<{ id: string; content?: string; topicId?: string }> = []
+  if (sessionsData) {
+    try {
+      const sessions = JSON.parse(sessionsData)
+      sessionResults = (Array.isArray(sessions) ? sessions : []).filter((s: any) => {
+        const topicIdMatch = s.topicId?.toLowerCase().includes(query)
+        const contentMatch = s.content?.toLowerCase().includes(query)
+        return topicIdMatch || contentMatch
+      }).slice(0, 3).map((s: any) => ({
+        id: s.id,
+        content: s.content,
+        topicId: s.topicId
+      }))
+    } catch {
+      // JSON 解析失败时忽略
+    }
+  }
+
+  searchResults.value = { topicResults, cardResults, sessionResults }
+}
+
+/** 清空搜索 */
+function clearSearch(): void {
+  searchQuery.value = ''
+  showSearchResults.value = false
+  searchResults.value = { topicResults: [], cardResults: [], sessionResults: [] }
+}
+
+/** 关闭搜索结果 */
+function closeSearch(): void {
+  showSearchResults.value = false
+}
+
+/** 跳转到主题详情页 */
+function navigateToTopic(topicId: string): void {
+  closeSearch()
+  router.push(`/paths/${topicId}`)
+}
 </script>

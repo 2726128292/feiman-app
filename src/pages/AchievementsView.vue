@@ -76,11 +76,19 @@
               </div>
             </div>
 
-            <!-- 状态图标 -->
-            <div class="shrink-0 pt-1">
+            <!-- 状态图标 / 分享按钮 -->
+            <div class="shrink-0 pt-1 flex items-center gap-1">
               <CheckCircle v-if="badge.status === 'unlocked'" :size="18" class="text-emerald-500" />
               <Clock v-else-if="badge.status === 'in-progress'" :size="18" class="text-blue-400" />
               <Lock v-else :size="18" class="text-slate-300" />
+              <!-- 已解锁成就的分享按钮 -->
+              <button
+                v-if="badge.status === 'unlocked'"
+                class="p-1 rounded-full text-slate-400 hover:text-emerald-500 active:bg-emerald-50 transition-colors"
+                @click.stop="handleShareBadge(badge)"
+              >
+                <Share2 :size="14" />
+              </button>
             </div>
           </div>
         </div>
@@ -113,7 +121,11 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
-import { CheckCircle, Clock, Lock } from 'lucide-vue-next'
+import { CheckCircle, Clock, Lock, Share2 } from 'lucide-vue-next'
+import { useShare } from '@/composables/useShare'
+
+// 分享功能
+const { shareAchievement } = useShare()
 
 interface BadgeItem {
   type: string
@@ -303,6 +315,15 @@ function statusText(status: string): string {
     case 'locked': return '未解锁'
     default: return ''
   }
+}
+
+// 分享单个成就
+async function handleShareBadge(badge: BadgeItem) {
+  await shareAchievement({
+    title: badge.name,
+    description: badge.description,
+    earnedAt: badge.unlockedAt,
+  })
 }
 
 onMounted(() => {

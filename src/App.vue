@@ -1,5 +1,7 @@
 <template>
   <AppLayout :current-tab="currentTab" @update:tab="onTabChange">
+    <!-- 全局 Toast 通知 -->
+    <Toast :toasts="toasts" @close="closeToast" />
     <router-view v-slot="{ Component }">
       <transition name="page" mode="out-in">
         <component :is="Component" />
@@ -9,14 +11,22 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, watch } from 'vue'
+import { ref, onMounted, watch, provide } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import AppLayout from '@/components/layout/AppLayout.vue'
+import Toast from '@/components/common/Toast.vue'
+import { useToast } from '@/composables/useToast'
 import { useAppStore } from '@/stores/app'
 
 const router = useRouter()
 const route = useRoute()
 const { hasSeenSplash, markSplashSeen } = useAppStore()
+
+// 初始化全局 Toast
+const { showToast, toasts, closeToast } = useToast()
+
+// 通过 provide 注入，让子组件也能调用 showToast
+provide('toast', showToast)
 const currentTab = ref(0)
 
 // Tab 路由映射
