@@ -7,6 +7,14 @@
         <p class="text-sm text-slate-500 mt-0.5">AI 按优先级安排学习任务</p>
       </div>
 
+      <!-- 番茄钟计时器 -->
+      <PomodoroTimer
+        :duration="pomodoroDuration"
+        mode="work"
+        @complete="onPomodoroComplete"
+        @mode-change="onModeChange"
+      />
+
       <!-- 周历头部 -->
       <div class="space-y-2">
         <!-- 星期行 -->
@@ -49,6 +57,7 @@
             <p class="text-sm font-bold text-slate-900 leading-snug">{{ task.title }}</p>
             <p class="text-xs mt-1 font-medium" :class="taskTagColor(task)">
               {{ taskTagText(task) }}
+              <span v-if="task.pomodoroStarted" class="ml-1.5 text-indigo-500">· 已开始</span>
             </p>
           </div>
         </div>
@@ -69,10 +78,14 @@
 import { ref, type Ref } from 'vue'
 import { mockDailyPlans } from '@/utils/mock'
 import type { PlanTask } from '@/types/plan'
+import PomodoroTimer from '@/components/common/PomodoroTimer.vue'
 
 const weekDays = ['一', '二', '三', '四', '五', '六', '日']
 const weekDates = [1, 2, 3, 4, 5, 6, 7]
 const selectedDayIndex: Ref<number> = ref(3) // 周四
+
+// 番茄钟时长（分钟）
+const pomodoroDuration = ref(25)
 
 function isSelectedDay(i: number): boolean {
   return i === selectedDayIndex.value
@@ -109,5 +122,37 @@ function taskTagText(task: PlanTask): string {
     case 'remediation': return '高优先级'
     default: return ''
   }
+}
+
+// ====== 番茄钟事件处理 ======
+
+/** 番茄钟完成时，标记当前任务已开始 */
+function onPomodoroComplete(data: { mode: string; duration: number }): void {
+  if (data.mode === 'work') {
+    // 找到当前时间最接近的未完成任务并标记开始
+    const now = new Date()
+    const currentHour = now.getHours()
+
+    for (const task of plan.value.tasks) {
+      const taskHour = parseInt(task.time.split(':')[0], 10)
+      // 找到当前或之后最近的未完成任务
+      if (!task.pomodoroStarted && taskHour >= currentHour - 1) {
+        task.pomodoroStarted = true
+        break
+      }
+    }
+
+    // 如果没有匹配的任务，标记第一个未完成的任务
+    const unmarkedTask = plan.value.tasks.find(t => !t.pomodoroStarted)
+    if (unmarkedTask) {
+      unmarkedTask.pomodoroStarted = true
+    }
+  }
+}
+
+/** 模式切换回调 */
+function onModeChange(mode: string): void {
+  // 可用于记录模式切换日志等
+  console.log(`番茄钟切换到模式: ${mode}`)
 }
 </script>

@@ -137,6 +137,22 @@
           </div>
           <ChevronRight :size="18" class="text-slate-300 shrink-0 ml-3" />
         </button>
+
+        <!-- 重置引导页 -->
+        <button
+          class="w-full flex items-center justify-between py-3.5 px-4 active:bg-slate-50 transition-colors"
+          @click="handleResetSplash"
+        >
+          <div class="flex items-center gap-3 min-w-0">
+            <div class="w-9 h-9 rounded-xl bg-orange-50 flex items-center justify-center shrink-0">
+              <RotateCcw :size="18" class="text-orange-500" />
+            </div>
+            <div class="text-left min-w-0">
+              <p class="text-sm font-semibold text-slate-800">重置引导页</p>
+              <p class="text-xs text-slate-400 mt-0.5">重新显示启动引导</p>
+            </div>
+          </div>
+        </button>
       </div>
 
       <!-- DeepSeek AI 配置卡片 -->
@@ -238,6 +254,14 @@
         </div>
       </div>
 
+      <!-- Toast 提示 -->
+      <Transition name="toast">
+        <div
+          v-if="showToast"
+          class="fixed top-6 left-1/2 -translate-x-1/2 z-50 px-5 py-3 rounded-full bg-slate-800 text-white text-sm font-medium shadow-lg"
+        >{{ toastMessage }}</div>
+      </Transition>
+
     </div>
   </div>
 </template>
@@ -245,7 +269,7 @@
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue'
 import { useRouter } from 'vue-router'
-import { Moon, Bell, Database, Download, Shield, ChevronRight, Sparkles, LoaderCircle, Check, ShieldCheck, WifiOff, Key } from 'lucide-vue-next'
+import { Moon, Bell, Database, Download, Shield, ChevronRight, Sparkles, LoaderCircle, Check, ShieldCheck, WifiOff, Key, RotateCcw } from 'lucide-vue-next'
 import {
   isAIReady,
   getAIConfig,
@@ -308,6 +332,18 @@ async function handlePWAInstall() {
 // ====== 隐私弹窗 ======
 const showPrivacyInfo = ref(false)
 
+// ====== 重置引导页 ======
+const showToast = ref(false)
+const toastMessage = ref('')
+
+function handleResetSplash() {
+  localStorage.removeItem('feiman_splash_seen')
+  localStorage.removeItem('feiman_has_seen_splash')
+  toastMessage.value = '已重置，下次打开将显示启动页'
+  showToast.value = true
+  setTimeout(() => { showToast.value = false }, 2000)
+}
+
 // ====== API Key ======
 const showKeyInput = ref(false)
 const apiKeyInput = ref('')
@@ -337,5 +373,21 @@ async function saveKey() {
 }
 .animate-slide-up {
   animation: slide-up 0.25s ease-out;
+}
+
+/* Toast 动画 */
+.toast-enter-active {
+  transition: all 0.25s ease-out;
+}
+.toast-leave-active {
+  transition: all 0.2s ease-in;
+}
+.toast-enter-from {
+  opacity: 0;
+  transform: translateX(-50%) translateY(-12px);
+}
+.toast-leave-to {
+  opacity: 0;
+  transform: translateX(-50%) translateY(-8px);
 }
 </style>

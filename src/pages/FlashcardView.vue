@@ -10,6 +10,74 @@
           <p class="text-sm text-slate-500 mt-0.5">自由选择要复习的内容</p>
         </div>
 
+        <!-- 新建闪卡 -->
+        <div class="bg-white rounded-2xl shadow-sm p-4">
+          <button
+            v-if="!showCreateForm"
+            class="flex items-center justify-center gap-2 w-full py-3 rounded-xl border-2 border-dashed border-slate-300 text-sm text-slate-500 cursor-pointer hover:border-[#4F6EF7] hover:text-[#4F6EF7] transition-colors"
+            @click="showCreateForm = true"
+          >
+            <Plus :size="18" />
+            新建闪卡
+          </button>
+
+          <!-- 内联创建表单 -->
+          <div v-else class="space-y-3">
+            <div class="flex items-center justify-between">
+              <h3 class="text-sm font-semibold text-slate-700">新建闪卡</h3>
+              <button class="text-xs text-slate-400 hover:text-slate-600" @click="cancelCreate">取消</button>
+            </div>
+
+            <!-- 问题输入 -->
+            <input
+              v-model="createForm.question"
+              type="text"
+              placeholder="输入问题（如：什么是闭包？）"
+              class="w-full px-3 py-2.5 rounded-xl border border-slate-200 text-sm placeholder:text-slate-300 focus:outline-none focus:border-[#4F6EF7] focus:ring-1 focus:ring-[#4F6EF7]/20"
+            />
+
+            <!-- 答案输入 -->
+            <textarea
+              v-model="createForm.answer"
+              placeholder="输入答案（可以详细写）"
+              rows="3"
+              class="w-full px-3 py-2.5 rounded-xl border border-slate-200 text-sm placeholder:text-slate-300 focus:outline-none focus:border-[#4F6EF7] focus:ring-1 focus:ring-[#4F6EF7]/20 resize-none"
+            />
+
+            <!-- 主题选择 -->
+            <div class="flex flex-wrap gap-1.5">
+              <button
+                v-for="topic in createTopics"
+                :key="topic"
+                class="px-3 py-1 rounded-full text-xs font-medium transition-colors"
+                :class="createForm.topic === topic ? 'bg-[#4F6EF7] text-white' : 'bg-slate-100 text-slate-500 hover:bg-slate-200'"
+                @click="createForm.topic = topic"
+              >
+                {{ topic }}
+              </button>
+            </div>
+
+            <!-- 操作按钮 -->
+            <div class="flex gap-2 pt-1">
+              <button
+                class="flex-1 py-2.5 rounded-xl bg-[#4F6EF7] text-white text-sm font-semibold active:scale-[0.98] transition-transform disabled:opacity-50"
+                :disabled="!createForm.question.trim()"
+                @click="saveNewCard"
+              >
+                保存
+              </button>
+              <button
+                class="px-5 py-2.5 rounded-xl bg-slate-100 text-slate-500 text-sm font-medium active:scale-[0.98] transition-transform"
+                @click="cancelCreate"
+              >
+                取消
+              </button>
+            </div>
+
+            <p v-if="createSuccessMsg" class="text-xs text-emerald-600 text-center">{{ createSuccessMsg }}</p>
+          </div>
+        </div>
+
         <!-- 上传自定义卡片 -->
         <div class="bg-white rounded-2xl shadow-sm p-4">
           <div class="flex items-center justify-between mb-3">
@@ -24,6 +92,39 @@
             <input type="file" accept=".txt,.json" class="hidden" @change="handleFileUpload" />
           </label>
           <p v-if="uploadStatus" class="mt-2 text-xs" :class="uploadSuccess ? 'text-emerald-600' : 'text-red-500'">{{ uploadStatus }}</p>
+        </div>
+
+        <!-- 错题本 -->
+        <div v-if="wrongBookEntries.length > 0" class="bg-white rounded-2xl shadow-sm p-4 border border-red-100">
+          <div class="flex items-center justify-between mb-3">
+            <div class="flex items-center gap-2">
+              <span class="text-base">🔴</span>
+              <h3 class="text-sm font-semibold text-slate-700">错题本</h3>
+              <span class="text-xs text-red-500 font-medium">({{ wrongBookEntries.length }} 张)</span>
+            </div>
+            <button
+              class="px-3 py-1 rounded-full text-xs font-medium bg-red-50 text-red-600 hover:bg-red-100 active:scale-95 transition-colors"
+              @click="startWrongBookReview"
+            >
+              复习
+            </button>
+          </div>
+
+          <div class="space-y-2">
+            <div
+              v-for="entry in wrongBookEntries.slice(0, 5)"
+              :key="entry.cardId"
+              class="flex items-center justify-between px-3 py-2 rounded-lg bg-red-50/50"
+            >
+              <div class="min-w-0 flex-1">
+                <p class="text-xs font-medium text-slate-700 truncate">{{ entry.question }}</p>
+                <p class="text-[10px] text-red-400 mt-0.5">忘了 {{ entry.forgetCount }} 次</p>
+              </div>
+            </div>
+            <p v-if="wrongBookEntries.length > 5" class="text-[10px] text-slate-400 text-center pt-1">
+              还有 {{ wrongBookEntries.length - 5 }} 张...
+            </p>
+          </div>
         </div>
 
         <!-- 按主题分组选择 -->
@@ -182,15 +283,124 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, reactive } from 'vue'
+import { ref, computed, reactive, onMounted } from 'vue'
 import { mockCards } from '@/utils/mock'
 import { updateSM2, type SM2Params } from '@/composables/useSpacedRepetition'
 import type { ReviewCard } from '@/types/card'
-import { Check, Upload, ChevronLeft, ChevronRight } from 'lucide-vue-next'
+import { Check, Upload, ChevronLeft, ChevronRight, Plus } from 'lucide-vue-next'
 
 // ====== 模式状态 ======
 type Mode = 'select' | 'review'
 const mode = ref<Mode>('select')
+
+// ====== 新建卡片表单 ======
+const showCreateForm = ref(false)
+const createSuccessMsg = ref('')
+const createTopics = ['前端工程化', '计算机网络', '高等数学', '数据结构', '自定义']
+const createForm = reactive({
+  question: '',
+  answer: '',
+  topic: '前端工程化',
+})
+
+function saveNewCard() {
+  if (!createForm.question.trim()) return
+
+  const newCard: ReviewCard = {
+    id: crypto.randomUUID(),
+    topicId: createForm.topic,
+    question: createForm.question.trim(),
+    answer: createForm.answer.trim() || '(待补充)',
+    dueAt: new Date().toISOString(),
+    interval: 1,
+    easeFactor: 2.5,
+    reviewCount: 0,
+  }
+
+  allCards.value.push(newCard)
+  // 自动选中新卡片所属主题
+  selectedTopics.add(createForm.topic)
+
+  // 显示成功提示
+  createSuccessMsg.value = '✅ 卡片创建成功！'
+  setTimeout(() => { createSuccessMsg.value = '' }, 2000)
+
+  // 重置表单并关闭
+  cancelCreate()
+}
+
+function cancelCreate() {
+  showCreateForm.value = false
+  createForm.question = ''
+  createForm.answer = ''
+  createForm.topic = '前端工程化'
+}
+
+// ====== 错题本 ======
+interface WrongBookEntry {
+  cardId: string
+  topicId: string
+  question: string
+  forgetCount: number
+  lastForgottenAt: string
+}
+
+const WRONG_BOOK_KEY = 'feiman_wrong_book'
+const wrongBookEntries = ref<WrongBookEntry[]>([])
+
+function loadWrongBook() {
+  try {
+    const raw = localStorage.getItem(WRONG_BOOK_KEY)
+    if (raw) {
+      wrongBookEntries.value = JSON.parse(raw) as WrongBookEntry[]
+    }
+  } catch {
+    wrongBookEntries.value = []
+  }
+}
+
+function saveWrongBook() {
+  try {
+    localStorage.setItem(WRONG_BOOK_KEY, JSON.stringify(wrongBookEntries.value))
+  } catch {
+    // ignore write errors
+  }
+}
+
+function addToWrongBook(cardId: string, topicId: string, question: string) {
+  const existing = wrongBookEntries.value.find(e => e.cardId === cardId)
+  if (existing) {
+    existing.forgetCount++
+    existing.lastForgottenAt = new Date().toISOString()
+  } else {
+    wrongBookEntries.value.push({
+      cardId,
+      topicId,
+      question,
+      forgetCount: 1,
+      lastForgottenAt: new Date().toISOString(),
+    })
+  }
+  saveWrongBook()
+}
+
+function startWrongBookReview() {
+  // 收集错题本中的卡片（从 allCards 中查找）
+  const wrongCardIds = new Set(wrongBookEntries.value.map(e => e.cardId))
+  const wrongCards = allCards.value.filter(c => wrongCardIds.has(c.id))
+
+  // 重置错题卡片的间隔为 1（明天再复习）
+  for (const card of wrongCards) {
+    card.interval = 1
+    card.dueAt = new Date().toISOString()
+  }
+
+  reviewCards.value = wrongCards
+  currentIndex.value = 0
+  showAnswer.value = false
+  reviewedCount.value = 0
+  mode.value = 'review'
+}
 
 // ====== 选择模式数据 ======
 
@@ -370,6 +580,11 @@ function rateCard(quality: 'forget' | 'hard' | 'easy') {
     card.interval = updated.interval
     card.easeFactor = updated.easeFactor
     card.reviewCount = updated.repetition
+
+    // 忘记时自动加入错题本
+    if (quality === 'forget') {
+      addToWrongBook(card.id, card.topicId || '', card.question)
+    }
   }
 
   reviewedCount.value++
@@ -399,6 +614,11 @@ function skipCard() {
     currentIndex.value++
   }
 }
+
+// 初始化加载错题本
+onMounted(() => {
+  loadWrongBook()
+})
 </script>
 
 <style scoped>

@@ -42,15 +42,22 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAppStore } from '@/stores/app'
 import ProgressBar from '@/components/common/ProgressBar.vue'
 
 const router = useRouter()
-const { markSplashSeen } = useAppStore()
+const { markSplashSeen, hasSeenSplash } = useAppStore()
 
 const goalProgress = ref(60)
+
+onMounted(() => {
+  // 如果已经看过启动页，直接跳转到首页
+  if (hasSeenSplash.value) {
+    router.replace('/home')
+  }
+})
 
 function handleBrainTap() {
   // 轻微动画反馈已通过 CSS active:scale-95 实现
@@ -58,6 +65,7 @@ function handleBrainTap() {
 
 function handleStart() {
   markSplashSeen()
+  localStorage.setItem('feiman_splash_seen', 'true')
   router.push('/home')
 }
 </script>

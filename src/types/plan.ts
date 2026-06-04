@@ -6,6 +6,7 @@ export interface PlanTask {
   priority: 'high' | 'medium' | 'low'
   completed: boolean
   topicId?: string
+  pomodoroStarted?: boolean
 }
 
 export interface DailyPlan {

@@ -7,12 +7,31 @@
         <p class="text-sm text-slate-400 mt-0.5">录音后自动转文字与评分</p>
       </div>
 
+      <!-- 错误提示 -->
+      <div
+        v-if="errorMessage"
+        class="bg-red-500/20 border border-red-500/40 rounded-xl p-4 flex items-start gap-3"
+      >
+        <span class="text-red-400 text-lg leading-none mt-0.5">⚠</span>
+        <div>
+          <p class="text-sm text-red-300">{{ errorMessage }}</p>
+          <a
+            v-if="errorLink"
+            :href="errorLink"
+            target="_blank"
+            class="text-xs text-blue-400 underline mt-1 inline-block"
+          >了解更多</a>
+        </div>
+      </div>
+
       <!-- 录音区域 -->
       <div class="flex flex-col items-center py-8">
         <!-- 录音按钮 -->
         <button
-          class="w-48 h-48 rounded-full bg-[#4F6EF7] flex items-center justify-center shadow-2xl shadow-blue-500/30 transition-all duration-300 cursor-pointer"
-          :class="{ 'animate-pulse-scale': isRecording }"
+          class="w-48 h-48 rounded-full flex items-center justify-center shadow-2xl transition-all duration-300 cursor-pointer"
+          :class="isRecording
+            ? 'bg-[#EF4444] shadow-red-500/30 animate-pulse-scale'
+            : 'bg-[#4F6EF7] shadow-blue-500/30'"
           @click="toggleRecording"
         >
           <span class="text-4xl font-bold text-white">{{ isRecording ? '停' : '录' }}</span>
@@ -23,45 +42,76 @@
 
         <!-- 转写文本 -->
         <div class="mt-5 w-full max-w-sm">
-          <p class="text-sm text-slate-500 mb-1.5">正在识别：</p>
-          <p class="text-sm text-slate-400 leading-relaxed line-clamp-3">
-            {{ transcription || '等待开始录音...' }}
+          <p class="text-sm text-slate-500 mb-1.5">
+            {{ isRecording ? '正在识别...' : hasRecorded ? '识别结果：' : '等待开始录音...' }}
           </p>
+          <p class="text-sm text-slate-400 leading-relaxed line-clamp-3 min-h-[4.2rem]">
+            {{ transcription || (hasRecorded ? '未识别到语音内容' : '') }}
+          </p>
+          <!-- 语音识别不支持提示 -->
+          <p v-if="stUnsupported" class="text-xs text-amber-400/80 mt-1.5">
+            当前浏览器不支持语音转文字，录音仍会保存
+          </p>
+        </div>
+
+        <!-- 录音回放 -->
+        <div v-if="audioUrl && !isRecording" class="mt-4 w-full max-w-sm bg-slate-800/60 rounded-xl p-4 flex items-center gap-3">
+          <button
+            class="w-10 h-10 rounded-full bg-[#4F6EF7] flex items-center justify-center shrink-0 cursor-pointer"
+            @click="togglePlayback"
+          >
+            <span v-if="!isPlaying" class="text-white text-base leading-none ml-0.5">▶</span>
+            <span v-else class="text-white text-base leading-none">❚❚</span>
+          </button>
+          <audio ref="audioRef" :src="audioUrl" class="hidden" />
+          <div class="flex-1">
+            <p class="text-xs text-slate-400">录音回放</p>
+            <p class="text-xs text-slate-500">{{ formattedDuration }}</p>
+          </div>
         </div>
       </div>
 
       <!-- 实时指标面板 -->
-      <div class="bg-slate-800/80 backdrop-blur-sm rounded-2xl p-5 border border-slate-700/50">
+      <div v-if="hasRecorded" class="bg-slate-800/80 backdrop-blur-sm rounded-2xl p-5 border border-slate-700/50">
         <h2 class="text-base font-bold text-slate-200 mb-4">实时指标</h2>
         <div class="space-y-4">
           <!-- 语速 -->
           <div>
             <div class="flex items-center justify-between mb-1.5">
               <span class="text-sm text-slate-400">语速</span>
-              <span class="text-sm font-semibold text-cyan-400">186 字/分</span>
+              <span class="text-sm font-semibold text-cyan-400">{{ metrics.wpm }} 字/分</span>
             </div>
             <div class="w-full h-2 bg-slate-700 rounded-full overflow-hidden">
-              <div class="h-full w-[62%] bg-gradient-to-r from-cyan-500 to-cyan-400 rounded-full" />
+              <div
+                class="h-full bg-gradient-to-r from-cyan-500 to-cyan-400 rounded-full transition-all duration-500"
+                :style="{ width: Math.min(metrics.wpm / 3, 100) + '%' }"
+              />
             </div>
           </div>
           <!-- 停顿 -->
           <div>
             <div class="flex items-center justify-between mb-1.5">
               <span class="text-sm text-slate-400">停顿</span>
-              <span class="text-sm font-semibold text-emerald-400">正常</span>
+              <span class="text-sm font-semibold text-emerald-400">{{ metrics.pauseStatus === 'normal' ? '正常' : '偏长' }}</span>
             </div>
             <div class="w-full h-2 bg-slate-700 rounded-full overflow-hidden">
-              <div class="h-full w-[45%] bg-gradient-to-r from-emerald-500 to-emerald-400 rounded-full" />
+              <div
+                class="h-full bg-gradient-to-r from-emerald-500 to-emerald-400 rounded-full transition-all duration-500"
+                :style="{ width: metrics.pauseStatus === 'normal' ? '45%' : '75%' }"
+              />
             </div>
           </div>
           <!-- 清晰度 -->
           <div>
             <div class="flex items-center justify-between mb-1.5">
               <span class="text-sm text-slate-400">清晰度</span>
-              <span class="text-sm font-semibold text-blue-400">86 分</span>
+              <span class="text-sm font-semibold text-blue-400">{{ metrics.clarityScore }} 分</span>
             </div>
             <div class="w-full h-2 bg-slate-700 rounded-full overflow-hidden">
-              <div class="h-full w-[86%] bg-gradient-to-r from-blue-500 to-blue-400 rounded-full" />
+              <div
+                class="h-full bg-gradient-to-r from-blue-500 to-blue-400 rounded-full transition-all duration-500"
+                :style="{ width: metrics.clarityScore + '%' }"
+              />
             </div>
           </div>
         </div>
@@ -69,7 +119,11 @@
 
       <!-- 底部按钮 -->
       <button
-        class="w-full py-3.5 rounded-full bg-white text-slate-900 text-base font-semibold active:scale-[0.98] transition-transform duration-150"
+        class="w-full py-3.5 rounded-full text-base font-semibold active:scale-[0.98] transition-transform duration-150"
+        :class="hasRecorded
+          ? 'bg-white text-slate-900'
+          : 'bg-slate-600 text-slate-400 cursor-not-allowed'"
+        :disabled="!hasRecorded"
         @click="handleFinish"
       >
         结束并分析
@@ -84,39 +138,351 @@ import { useRouter } from 'vue-router'
 
 const router = useRouter()
 
+// ====== 状态 ======
 const isRecording = ref(false)
-const seconds = ref(222) // 03:42
+const seconds = ref(0)
 let timerInterval: ReturnType<typeof setInterval> | null = null
 
+// 录音相关
+let mediaRecorder: MediaRecorder | null = null
+let audioStream: MediaStream | null = null
+const chunks: Blob[] = []
+const audioUrl = ref<string>('')
+const audioBlob = ref<Blob | null>(null)
+const hasRecorded = ref(false)
+const isPlaying = ref(false)
+const audioRef = ref<HTMLAudioElement | null>(null)
+
+// 转写相关
+const transcription = ref('')
+const stUnsupported = ref(false)
+let recognition: SpeechRecognition | null = null
+
+// 错误提示
+const errorMessage = ref('')
+const errorLink = ref('')
+
+// 指标（录音结束后计算）
+const metrics = ref({
+  wpm: 0,
+  pauseStatus: 'normal' as 'normal' | 'long',
+  clarityScore: 0,
+})
+
+// ====== 计算属性 ======
 const formattedTime = computed(() => {
   const m = Math.floor(seconds.value / 60).toString().padStart(2, '0')
   const s = (seconds.value % 60).toString().padStart(2, '0')
   return `${m}:${s}`
 })
 
-const transcription = ref('递归是一种函数调用自己的方式，就像俄罗斯套娃，每个套娃里面还有一个更小的...')
+const formattedDuration = computed(() => {
+  const totalSeconds = seconds.value
+  if (totalSeconds === 0) return ''
+  const m = Math.floor(totalSeconds / 60).toString().padStart(2, '0')
+  const s = (totalSeconds % 60).toString().padStart(2, '0')
+  return `时长 ${m}:${s}`
+})
 
-function toggleRecording() {
-  isRecording.value = !isRecording.value
-  if (isRecording.value) {
-    timerInterval = setInterval(() => {
-      seconds.value++
-    }, 1000)
-  } else {
-    if (timerInterval) {
-      clearInterval(timerInterval)
-      timerInterval = null
+// ====== 浏览器支持检测 ======
+function checkBrowserSupport(): { mediaRecorder: boolean; speechRecognition: boolean } {
+  const mr = typeof MediaRecorder !== 'undefined'
+  // 兼容 webkitSpeechRecognition
+  const sr = !!(window.SpeechRecognition || window.webkitSpeechRecognition)
+  return { mediaRecorder: mr, speechRecognition: sr }
+}
+
+// ====== 初始化语音识别 ======
+function initSpeechRecognition(): void {
+  const SpeechRecognitionCtor = window.SpeechRecognition || window.webkitSpeechRecognition
+  if (!SpeechRecognitionCtor) {
+    stUnsupported.value = true
+    return
+  }
+
+  recognition = new SpeechRecognitionCtor()
+  recognition.lang = 'zh-CN'
+  recognition.continuous = true
+  recognition.interimResults = true
+  recognition.maxAlternatives = 1
+
+  recognition.onresult = (event: SpeechRecognitionEvent) => {
+    let finalTranscript = ''
+    let interimTranscript = ''
+
+    for (let i = event.resultIndex; i < event.results.length; i++) {
+      const result = event.results[i]
+      if (result.isFinal) {
+        finalTranscript += result[0].transcript
+      } else {
+        interimTranscript += result[0].transcript
+      }
+    }
+
+    transcription.value = finalTranscript || interimTranscript
+  }
+
+  recognition.onerror = (event: Event) => {
+    const e = event as SpeechRecognitionErrorEvent
+    if (e.error !== 'no-speech') {
+      console.warn('语音识别错误:', e.error)
+    }
+  }
+
+  recognition.onend = () => {
+    // 如果仍在录音中，尝试重新启动（语音识别会自动结束）
+    if (isRecording.value) {
+      try {
+        recognition?.start()
+      } catch {
+        // 忽略重启失败
+      }
     }
   }
 }
 
-function handleFinish() {
-  if (timerInterval) clearInterval(timerInterval)
-  router.push('/explain/new/diagnosis')
+// ====== 录音控制 ======
+async function toggleRecording(): Promise<void> {
+  if (isRecording.value) {
+    stopRecording()
+  } else {
+    await startRecording()
+  }
 }
 
+async function startRecording(): Promise<void> {
+  try {
+    // 检查浏览器支持
+    const support = checkBrowserSupport()
+    if (!support.mediaRecorder) {
+      errorMessage.value = '当前浏览器不支持录音功能，请使用 Chrome、Edge 或 Safari 最新版本。'
+      errorLink.value = 'https://developer.mozilla.org/zh-CN/docs/Web/API/MediaRecorder_API'
+      return
+    }
+
+    // 清除之前的状态
+    errorMessage.value = ''
+    errorLink.value = ''
+    chunks.length = 0
+    transcription.value = ''
+    hasRecorded.value = false
+    seconds.value = 0
+    if (audioUrl.value) {
+      URL.revokeObjectURL(audioUrl.value)
+      audioUrl.value = ''
+    }
+    audioBlob.value = null
+
+    // 请求麦克风权限
+    audioStream = await navigator.mediaDevices.getUserMedia({
+      audio: {
+        echoCancellation: true,
+        noiseSuppression: true,
+        autoGainControl: true,
+      },
+    })
+
+    // 创建 MediaRecorder
+    const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
+      ? 'audio/webm;codecs=opus'
+      : 'audio/webm'
+
+    mediaRecorder = new MediaRecorder(audioStream, { mimeType })
+
+    mediaRecorder.ondataavailable = (event: BlobEvent) => {
+      if (event.data.size > 0) {
+        chunks.push(event.data)
+      }
+    }
+
+    mediaRecorder.onstop = () => {
+      handleRecordingComplete()
+    }
+
+    mediaRecorder.onerror = (event: Event) => {
+      console.error('MediaRecorder 错误:', event)
+      errorMessage.value = '录音过程中出现错误，请重试。'
+    }
+
+    // 开始录音
+    mediaRecorder.start(1000) // 每1000ms收集一次数据
+    isRecording.value = true
+
+    // 启动计时器
+    timerInterval = setInterval(() => {
+      seconds.value++
+    }, 1000)
+
+    // 启动语音识别
+    initSpeechRecognition()
+    if (recognition) {
+      try {
+        recognition.start()
+      } catch {
+        // 如果启动失败，忽略，录音仍然继续
+      }
+    }
+  } catch (err: unknown) {
+    const error = err as Error
+    if (error.name === 'NotAllowedError' || error.name === 'PermissionDeniedError') {
+      errorMessage.value = '麦克风权限被拒绝。请在浏览器地址栏左侧点击图标，允许访问麦克风后重试。'
+    } else if (error.name === 'NotFoundError') {
+      errorMessage.value = '未检测到可用的麦克风设备，请确认已连接麦克风。'
+    } else {
+      errorMessage.value = `无法启动录音：${error.message}`
+    }
+  }
+}
+
+function stopRecording(): void {
+  // 停止 MediaRecorder
+  if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+    mediaRecorder.stop()
+  }
+
+  // 停止语音识别
+  if (recognition) {
+    try {
+      recognition.stop()
+    } catch {
+      // ignore
+    }
+  }
+
+  // 停止计时器
+  if (timerInterval) {
+    clearInterval(timerInterval)
+    timerInterval = null
+  }
+
+  // 关闭音频流
+  if (audioStream) {
+    audioStream.getTracks().forEach((track) => track.stop())
+    audioStream = null
+  }
+
+  isRecording.value = false
+}
+
+function handleRecordingComplete(): void {
+  if (chunks.length === 0) {
+    errorMessage.value = '未录制到音频内容，请检查麦克风是否正常工作。'
+    return
+  }
+
+  // 创建 Blob
+  const mimeType = mediaRecorder?.mimeType || 'audio/webm'
+  audioBlob.value = new Blob(chunks, { type: mimeType })
+  audioUrl.value = URL.createObjectURL(audioBlob.value)
+  hasRecorded.value = true
+
+  // 计算指标
+  calculateMetrics()
+
+  // 清理 mediaRecorder
+  mediaRecorder = null
+}
+
+// ====== 指标计算 ======
+function calculateMetrics(): void {
+  const durationMinutes = Math.max(seconds.value / 60, 0.01)
+
+  // 语速：基于转写文字字数 / 时长
+  const wordCount = transcription.value.replace(/\s/g, '').length
+  const wpm = durationMinutes > 0 ? Math.round(wordCount / durationMinutes) : 0
+
+  // 停顿判断：基于音频 blob 大小与时长比例的启发式估算
+  let pauseStatus: 'normal' | 'long' = 'normal'
+  let clarityScore = 75 // 基础分
+
+  if (audioBlob.value) {
+    const bytesPerSecond = audioBlob.value.size / Math.max(seconds.value, 1)
+    // 正常语速下 webm opus 大约 2000-8000 bytes/sec
+    // 过低说明有大量静音（停顿）
+    if (bytesPerSecond < 1500) {
+      pauseStatus = 'long'
+      clarityScore -= 15
+    } else if (bytesPerSecond > 3000) {
+      clarityScore += 10
+    }
+  }
+
+  // 有转写文字加分
+  if (wordCount > 10) {
+    clarityScore += 10
+  }
+  // 有一定时长加分
+  if (seconds.value >= 30) {
+    clarityScore += 5
+  }
+
+  clarityScore = Math.max(0, Math.min(100, clarityScore))
+
+  metrics.value = {
+    wpm: Math.max(wpm, 0),
+    pauseStatus,
+    clarityScore,
+  }
+}
+
+// ====== 回放控制 ======
+function togglePlayback(): void {
+  if (!audioRef.value) return
+  if (isPlaying.value) {
+    audioRef.value.pause()
+    isPlaying.value = false
+  } else {
+    audioRef.value.play()
+    isPlaying.value = true
+    audioRef.value.onended = () => {
+      isPlaying.value = false
+    }
+  }
+}
+
+// ====== 结束并分析 ======
+function handleFinish(): void {
+  if (timerInterval) clearInterval(timerInterval)
+  // 将录音数据传递给诊断页面（通过 sessionStorage）
+  if (audioBlob.value) {
+    try {
+      const reader = new FileReader()
+      reader.onload = () => {
+        sessionStorage.setItem('feiman_voice_blob', reader.result as string)
+        sessionStorage.setItem('feiman_voice_transcription', transcription.value)
+        sessionStorage.setItem('feiman_voice_duration', String(seconds.value))
+        sessionStorage.setItem('feiman_voice_metrics', JSON.stringify(metrics.value))
+        router.push('/explain/new/diagnosis')
+      }
+      reader.readAsDataURL(audioBlob.value!)
+    } catch {
+      // 即使保存失败也跳转
+      router.push('/explain/new/diagnosis')
+    }
+  } else {
+    router.push('/explain/new/diagnosis')
+  }
+}
+
+// ====== 清理 ======
 onUnmounted(() => {
   if (timerInterval) clearInterval(timerInterval)
+  if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+    mediaRecorder.stop()
+  }
+  if (recognition) {
+    try {
+      recognition.stop()
+    } catch {
+      // ignore
+    }
+  }
+  if (audioStream) {
+    audioStream.getTracks().forEach((track) => track.stop())
+  }
+  if (audioUrl.value) {
+    URL.revokeObjectURL(audioUrl.value)
+  }
 })
 </script>
 

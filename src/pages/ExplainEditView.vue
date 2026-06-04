@@ -42,8 +42,35 @@
           <span class="px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-blue-50 text-blue-600">限时 8 分钟</span>
         </div>
         <p class="text-lg font-bold text-slate-900 leading-relaxed">
-          请用生活类比解释：什么是递归？
+          请用生活类比解释：什么是{{ selectedTopic }}？
         </p>
+      </div>
+
+      <!-- 主题选择器 -->
+      <div class="bg-white rounded-2xl p-5 shadow-sm">
+        <label class="block text-sm font-semibold text-slate-700 mb-3">选择讲解主题</label>
+        <!-- 主题 Pills -->
+        <div class="flex flex-wrap gap-2 mb-3">
+          <button
+            v-for="topic in availableTopics"
+            :key="topic"
+            class="px-3.5 py-1.5 rounded-full text-xs font-medium transition-all active:scale-95"
+            :class="
+              selectedTopic === topic && !customInput
+                ? 'bg-[#4F6EF7] text-white shadow-md shadow-blue-500/20'
+                : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+            "
+            @click="selectPill(topic)"
+          >{{ topic }}</button>
+        </div>
+        <!-- 自定义输入 -->
+        <input
+          v-model="customInput"
+          type="text"
+          placeholder="或输入自定义主题..."
+          class="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 transition-all"
+          @input="onCustomInput"
+        />
       </div>
 
       <!-- 编辑器区域 -->
@@ -203,6 +230,22 @@ const stepLabels = ['选题', '讲解', '录音', '诊断', '复习']
 const editorRef = ref<HTMLDivElement>()
 const editorContent = ref('')
 
+// ====== 主题选择器 ======
+const availableTopics = ['递归', '闭包', 'Promise', '前端工程化', '计算机网络', '高等数学', '数据结构', '操作系统']
+const selectedTopic = ref('递归')
+const customInput = ref('')
+
+function selectPill(topic: string) {
+  selectedTopic.value = topic
+  customInput.value = ''
+}
+
+function onCustomInput() {
+  if (customInput.value.trim()) {
+    selectedTopic.value = customInput.value.trim()
+  }
+}
+
 // 评分结果
 const isScoring = ref(false)
 const scoreResult = ref<{
@@ -316,9 +359,9 @@ function handleTool(action: string) {
 
 /**
  * 本地评分引擎 - 不依赖任何外部 API
- * 从内容特征分析质量
+ * 从内容特征分析质量，根据主题动态调整检测
  */
-function localScore(content: string): typeof scoreResult.value {
+function localScore(content: string, topic: string): typeof scoreResult.value {
   const len = content.length
 
   // ====== 维度一：内容完整性 (25分) ======
@@ -372,11 +415,11 @@ function localScore(content: string): typeof scoreResult.value {
   // ====== 总分 ======
   const totalScore = completenessScore + analogyScore + clarityScore + depthScore
 
-  // ====== 知识缺口检测 ======
+  // ====== 知识缺口检测（根据主题动态调整） ======
   const gaps: typeof scoreResult.value.gaps = []
-  if (!/终止|停止|结束|base case|出口/.test(content)) {
-    gaps.push({ text: '缺少对「终止条件」的强调', priority: 'high' as const })
-  }
+  const topicLower = topic.toLowerCase()
+
+  // 通用缺口检测
   if (!analogyPatterns.some(p => p.test(content))) {
     gaps.push({ text: '没有使用生活化类比，纯概念描述可能难以理解', priority: 'medium' as const })
   }
@@ -387,17 +430,72 @@ function localScore(content: string): typeof scoreResult.value {
     gaps.push({ text: '可补充与相关概念的对比或因果关系', priority: 'low' as const })
   }
 
-  // ====== 追问生成 ======
+  // 主题特定缺口检测
+  if (topicLower.includes('递归')) {
+    if (!/终止|停止|结束|base case|出口/.test(content)) {
+      gaps.push({ text: '缺少对「终止条件」的强调', priority: 'high' as const })
+    }
+  } else if (topicLower.includes('闭包')) {
+    if (!/作用域|变量|引用|内存|函数/.test(content)) {
+      gaps.push({ text: '缺少对「变量捕获和作用域链」的解释', priority: 'high' as const })
+    }
+  } else if (topicLower.includes('promise')) {
+    if (!/异步|等待|then|catch|resolve|reject/.test(content)) {
+      gaps.push({ text: '缺少对「异步流程和状态变化」的说明', priority: 'high' as const })
+    }
+  } else if (topicLower.includes('网络') || topicLower.includes('http') || topicLower.includes('tcp')) {
+    if (!/协议|请求|响应|握手|包|数据/.test(content)) {
+      gaps.push({ text: '缺少对「通信过程和数据格式」的描述', priority: 'high' as const })
+    }
+  } else if (topicLower.includes('数学') || topicLower.includes('导数') || topicLower.includes('积分')) {
+    if (!/定义|公式|推导|证明|应用/.test(content)) {
+      gaps.push({ text: '缺少对「公式来源或实际应用场景」的说明', priority: 'high' as const })
+    }
+  } else if (topicLower.includes('操作系统') || topicLower.includes('进程') || topicLower.includes('线程')) {
+    if (!/调度|资源|并发|同步|锁|内核/.test(content)) {
+      gaps.push({ text: '缺少对「资源管理和调度机制」的解释', priority: 'high' as const })
+    }
+  } else {
+    // 自定义主题或其他：通用缺口
+    if (!/定义|概念|本质|核心|原理/.test(content)) {
+      gaps.push({ text: '建议先明确「这个概念的本质是什么」', priority: 'high' as const })
+    }
+  }
+
+  // ====== 追问生成（根据主题动态调整） ======
   const followUps: string[] = []
-  if (!/终止|停止|结束/.test(content)) {
-    followUps.push('如果递归没有终止条件，会发生什么？')
+
+  if (topicLower.includes('递归')) {
+    if (!/终止|停止|结束/.test(content)) followUps.push(`如果${topic}没有终止条件，会发生什么？`)
+    if (!/栈溢出|内存|性能|效率/.test(content)) followUps.push(`${topic}调用过深时会有什么风险？如何避免？`)
+    if (!/迭代|循环|非递归/.test(content)) followUps.push(`这个问题能用非递归方式解决吗？两种方式各有什么优劣？`)
+  } else if (topicLower.includes('闭包')) {
+    if (!/内存|泄漏|回收|释放/.test(content)) followUps.push(`${topic}会导致内存泄漏吗？什么时候需要手动清理？`)
+    if (!/模块|封装|私有|工厂/.test(content)) followUps.push(`${topic}在实际开发中有哪些常见应用模式？`)
+    followUps.push(`能用一个生活中的例子来比喻${topic}的工作方式吗？`)
+  } else if (topicLower.includes('promise')) {
+    if (!/错误|异常|catch|失败/.test(content)) followUps.push(`${topic}链中如果某一步出错了，后面的代码还会执行吗？`)
+    if (!/并行|all|race|await/.test(content)) followUps.push(`如何同时处理多个${topic}任务？`)
+    followUps.push(`${topic}和回调函数相比，主要解决了什么问题？`)
+  } else if (topicLower.includes('网络') || topicLower.includes('http') || topicLower.includes('tcp')) {
+    followUps.push(`${topic}在传输过程中数据丢失了怎么办？`)
+    followUps.push(`为什么${topic}需要三次握手而不是两次？`)
+    followUps.push(`${topic}和HTTPS有什么区别？加密是在哪一层做的？`)
+  } else if (topicLower.includes('数学') || topicLower.includes('导数') || topicLower.includes('积分')) {
+    followUps.push(`${topic}在实际生活中有哪些应用场景？`)
+    followUps.push(`能通过图形直观地理解${topic}的几何意义吗？`)
+    followUps.push(`${topic}和之前学过的哪些知识有联系？`)
+  } else if (topicLower.includes('操作系统') || topicLower.includes('进程') || topicLower.includes('线程')) {
+    followUps.push(`进程和线程有什么区别？什么时候该用哪个？`)
+    followUps.push(`死锁是怎么产生的？如何避免？`)
+    followUps.push(`${topic}是如何管理内存分配的？`)
+  } else {
+    // 自定义主题或其他
+    followUps.push(`能举一个${topic}在实际开发中的应用场景吗？`)
+    followUps.push(`${topic}的核心难点是什么？初学者容易在哪里卡住？`)
+    followUps.push(`可以用什么生活化的例子来帮助理解${topic}？`)
   }
-  if (!/栈溢出|内存|性能|效率/.test(content)) {
-    followUps.push('递归调用过深时会有什么风险？如何避免？')
-  }
-  if (!/迭代|循环|非递归/.test(content)) {
-    followUps.push('这个问题能用非递归方式解决吗？两种方式各有什么优劣？')
-  }
+
   if (followUps.length === 0) {
     followUps.push('能举一个这个概念在实际开发中的应用场景吗？')
   }
@@ -437,7 +535,7 @@ async function handleSubmitScore() {
   await new Promise(r => setTimeout(r, 600))
 
   // 始终使用本地评分，不需要 API
-  scoreResult.value = localScore(editorContent.value)
+  scoreResult.value = localScore(editorContent.value, selectedTopic.value)
 
   isScoring.value = false
 }
@@ -455,7 +553,7 @@ function saveSession() {
     const sessions = JSON.parse(localStorage.getItem('feiman_sessions') || '[]')
     sessions.push({
       id: crypto.randomUUID(),
-      topicId: 'recursion',
+      topicId: selectedTopic.value,
       content: editorContent.value,
       score: scoreResult.value?.score || 0,
       type: 'text',
