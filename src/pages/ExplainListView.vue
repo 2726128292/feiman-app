@@ -121,23 +121,34 @@
                   :size="14"
                   :class="session.type === 'voice' ? 'text-purple-500' : 'text-blue-500'"
                 />
-                <h3 class="text-sm font-semibold text-slate-800 truncate">{{ session.topicName }}</h3>
+                <h3 class="text-sm font-semibold text-slate-800 dark:text-slate-100 truncate">{{ session.topicName }}</h3>
               </div>
 
               <!-- 日期 -->
               <p class="text-xs text-slate-400">{{ formatDate(session.createdAt) }}</p>
             </div>
 
-            <!-- 分数 -->
-            <div
-              class="shrink-0 w-11 h-11 rounded-xl flex flex-col items-center justify-center"
-              :style="{ backgroundColor: getScoreColor(session.score) + '12' }"
-            >
-              <span
-                class="text-sm font-bold tabular-nums"
-                :style="{ color: getScoreColor(session.score) }"
-              >{{ session.score }}</span>
-              <span class="text-[9px] text-slate-400">分</span>
+            <!-- 右侧操作区：分数 + 闪卡按钮 -->
+            <div class="shrink-0 flex items-center gap-2">
+              <!-- 创建闪卡按钮 -->
+              <button
+                class="w-9 h-9 rounded-xl bg-purple-50 dark:bg-purple-500/10 flex items-center justify-center text-purple-500 hover:bg-purple-100 dark:hover:bg-purple-500/20 active:scale-90 transition-all shrink-0"
+                title="根据此讲解生成闪卡"
+                @click.stop="generateFlashcard(session)"
+              >
+                <Layers :size="15" />
+              </button>
+              <!-- 分数 -->
+              <div
+                class="w-11 h-11 rounded-xl flex flex-col items-center justify-center"
+                :style="{ backgroundColor: getScoreColor(session.score) + '12' }"
+              >
+                <span
+                  class="text-sm font-bold tabular-nums"
+                  :style="{ color: getScoreColor(session.score) }"
+                >{{ session.score }}</span>
+                <span class="text-[9px] text-slate-400">分</span>
+              </div>
             </div>
           </div>
           <!-- 内容层结束 -->
@@ -187,6 +198,13 @@
             >
               <Eye :size="18" class="text-[#4F6EF7]" />
               查看详情
+            </button>
+            <button
+              class="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm text-purple-600 dark:text-purple-400 active:bg-purple-50 dark:active:bg-purple-500/10 transition-colors"
+              @click="generateFlashcardFromMenu(menuSession)"
+            >
+              <Layers :size="18" />
+              生成闪卡
             </button>
             <button
               class="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm text-red-500 active:bg-red-50 transition-colors"
@@ -265,6 +283,7 @@ import {
   Eye,
   Trash2,
   Check,
+  Layers,    // 创建闪卡图标
 } from 'lucide-vue-next'
 import type { FeynmanSession } from '@/types'
 import { usePullRefresh } from '@/composables/usePullRefresh'
@@ -580,6 +599,51 @@ function closeMenu() {
 function viewDetail(session: DisplaySession) {
   closeMenu()
   router.push('/explain/new')
+}
+
+/**
+ * 根据讲解记录生成闪卡
+ * 提取讲解内容的核心概念作为问题，内容摘要作为答案
+ */
+function generateFlashcard(session: DisplaySession): void {
+  // 检查是否已存在同名闪卡
+  const cardsRaw = localStorage.getItem('feiman_review_cards') || localStorage.getItem('feiman_cards')
+  const cards = cardsRaw ? JSON.parse(cardsRaw) : []
+  const exists = cards.some((c: any) => c.question === session.topicName)
+  if (exists) {
+    showToast?.(`「${session.topicName}」已有对应闪卡`, 'info')
+    return
+  }
+
+  // 从讲解内容提取问题（用主题名）和答案（截取前200字）
+  const questionText = session.topicName
+  const answerText = session.content.length > 200
+    ? session.content.slice(0, 200) + '...'
+    : (session.content || '请用自己的话解释这个概念')
+
+  cards.push({
+    id: crypto.randomUUID(),
+    question: questionText,
+    answer: answerText,
+    tags: ['讲解', session.topicName, session.type === 'voice' ? '语音' : '文字'],
+    deck: 'default',
+    interval: 1,
+    easeFactor: 2.5,
+    repetition: 0,
+    nextReview: new Date(Date.now() + 86400000).toISOString(),
+    reviewCount: 0,
+    createdAt: new Date().toISOString(),
+    source: 'session_flashcard',
+  })
+
+  localStorage.setItem('feiman_review_cards', JSON.stringify(cards))
+  showToast?.(`已生成闪卡「${questionText}」`, 'success')
+}
+
+/** 从长按菜单生成闪卡（需要先关闭菜单） */
+function generateFlashcardFromMenu(session: DisplaySession): void {
+  closeMenu()
+  generateFlashcard(session)
 }
 
 /** 删除确认 - 显示自定义弹窗（替代 window.confirm） */
