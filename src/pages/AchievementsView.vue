@@ -1,9 +1,9 @@
 <template>
-  <div class="min-h-screen bg-slate-50 pb-24">
+  <div class="min-h-screen bg-slate-50 dark:bg-slate-900 pb-24">
     <div class="max-w-md mx-auto px-5 pt-6 space-y-4">
       <!-- 顶部标题区 -->
       <div>
-        <h1 class="text-2xl font-bold text-slate-900">成就系统</h1>
+        <h1 class="text-2xl font-bold text-slate-900 dark:text-slate-100">成就系统</h1>
         <p class="text-sm text-slate-500 mt-0.5">让坚持有反馈</p>
       </div>
 
@@ -25,9 +25,9 @@
         <div
           v-for="badge in allBadges"
           :key="badge.type + '-' + badge.level"
-          class="bg-white rounded-2xl shadow-sm p-4 transition-colors"
+          class="bg-white dark:bg-slate-800 rounded-2xl shadow-sm p-4 transition-colors"
           :class="{
-            'ring-2 ring-amber-300/50': badge.status === 'unlocked',
+            'ring-2 ring-amber-300/50 dark:ring-amber-500/30': badge.status === 'unlocked',
             'opacity-60': badge.status === 'locked',
           }"
         >
@@ -36,10 +36,10 @@
             <div
               class="w-12 h-12 rounded-xl flex items-center justify-center shrink-0 border-2 text-lg"
               :class="badge.status === 'unlocked'
-                ? 'bg-gradient-to-br from-amber-100 to-orange-100 border-amber-300'
+                ? 'bg-gradient-to-br from-amber-100 to-orange-100 dark:from-amber-900/30 dark:to-orange-900/30 border-amber-300 dark:border-amber-600'
                 : badge.status === 'in-progress'
-                  ? 'bg-slate-100 border-slate-200'
-                  : 'bg-slate-50 border-slate-100'
+                  ? 'bg-slate-100 dark:bg-slate-700 border-slate-200 dark:border-slate-600'
+                  : 'bg-slate-50 dark:bg-slate-800 border-slate-100 dark:border-slate-700'
               "
             >
               {{ badge.icon }}
@@ -48,7 +48,7 @@
             <!-- 信息区 -->
             <div class="flex-1 min-w-0">
               <div class="flex items-center gap-2">
-                <p class="text-sm font-semibold" :class="badge.status === 'unlocked' ? 'text-amber-700' : 'text-slate-800'">
+                <p class="text-sm font-semibold" :class="badge.status === 'unlocked' ? 'text-amber-700 dark:text-amber-300' : 'text-slate-800 dark:text-slate-200'">
                   {{ badge.name }}
                 </p>
                 <span
@@ -95,9 +95,9 @@
       </div>
 
       <!-- 积分统计卡片 -->
-      <div class="bg-white rounded-2xl shadow-sm p-4">
+      <div class="bg-white dark:bg-slate-800 rounded-2xl shadow-sm p-4">
         <div class="flex items-center justify-between mb-3">
-          <h3 class="text-base font-semibold text-slate-800">学习统计</h3>
+          <h3 class="text-base font-semibold text-slate-800 dark:text-slate-200">学习统计</h3>
           <span class="text-xs text-slate-400">实时数据</span>
         </div>
         <div class="grid grid-cols-3 gap-4 text-center">
@@ -117,8 +117,8 @@
       </div>
 
       <!-- ====== 功能17：我的学习曲线 ====== -->
-      <div class="bg-white rounded-2xl shadow-sm p-4 mt-4">
-        <h3 class="text-sm font-bold text-slate-700 mb-3 flex items-center gap-1.5">
+      <div class="bg-white dark:bg-slate-800 rounded-2xl shadow-sm p-4 mt-4">
+        <h3 class="text-sm font-bold text-slate-700 dark:text-slate-300 mb-3 flex items-center gap-1.5">
           <TrendingUp :size="15" class="text-emerald-500" /> 我的学习曲线
         </h3>
 

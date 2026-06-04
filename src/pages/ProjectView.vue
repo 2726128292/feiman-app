@@ -1,10 +1,10 @@
 <template>
-  <div class="min-h-screen bg-slate-50 pb-24">
+  <div class="min-h-screen bg-slate-50 dark:bg-slate-900 pb-24">
     <div class="max-w-md mx-auto px-5 pt-6 space-y-4">
       <!-- 顶部标题栏 -->
       <div class="flex items-center justify-between">
         <div>
-          <h1 class="text-xl font-bold text-slate-900">我的项目</h1>
+          <h1 class="text-xl font-bold text-slate-900 dark:text-slate-100">我的项目</h1>
           <p class="text-sm text-slate-500 mt-0.5">用作品验证理解</p>
         </div>
         <!-- 创建项目按钮 -->
@@ -18,11 +18,11 @@
 
       <!-- 空状态引导 -->
       <div v-if="projects.length === 0 && !showCreateForm" class="pt-16 pb-8 text-center space-y-4">
-        <div class="w-20 h-20 rounded-full bg-blue-50 flex items-center justify-center mx-auto">
+        <div class="w-20 h-20 rounded-full bg-blue-50 dark:bg-blue-900/20 flex items-center justify-center mx-auto">
           <FolderOpen :size="36" class="text-[#4F6EF7]" />
         </div>
         <div>
-          <h2 class="text-lg font-semibold text-slate-800">还没有项目</h2>
+          <h2 class="text-lg font-semibold text-slate-800 dark:text-slate-200">还没有项目</h2>
           <p class="text-sm text-slate-400 mt-1.5 max-w-xs mx-auto leading-relaxed">
             创建一个学习项目，把知识转化为实际作品。关联学习路径，追踪子任务进度。
           </p>
@@ -37,15 +37,15 @@
 
       <!-- 创建/编辑项目表单（内联展开面板） -->
       <Transition name="slide-down">
-        <div v-if="showCreateForm" class="bg-white rounded-2xl shadow-sm p-4 space-y-3 border border-blue-100">
-          <h3 class="text-sm font-bold text-slate-800">{{ editingProject ? '编辑项目' : '创建新项目' }}</h3>
+        <div v-if="showCreateForm" class="bg-white dark:bg-slate-800 rounded-2xl shadow-sm p-4 space-y-3 border border-blue-100 dark:border-blue-900/30">
+          <h3 class="text-sm font-bold text-slate-800 dark:text-slate-200">{{ editingProject ? '编辑项目' : '创建新项目' }}</h3>
 
           <!-- 项目标题 -->
           <input
             v-model="formData.title"
             type="text"
             placeholder="项目标题，如：Vue3 重构计划"
-            class="w-full px-3 py-2.5 text-sm border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 transition-colors"
+            class="w-full px-3 py-2.5 text-sm border border-slate-200 dark:border-slate-600 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 transition-colors text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-700"
             ref="titleInputRef"
           />
 
@@ -54,7 +54,7 @@
             v-model="formData.description"
             placeholder="简要描述项目目标..."
             rows="2"
-            class="w-full px-3 py-2.5 text-sm border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 resize-none transition-colors"
+            class="w-full px-3 py-2.5 text-sm border border-slate-200 dark:border-slate-600 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 resize-none transition-colors text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-700"
           />
 
           <!-- 关联路径选择 -->
@@ -94,7 +94,7 @@
         <div
           v-for="project in sortedProjects"
           :key="project.id"
-          class="bg-white rounded-2xl shadow-sm overflow-hidden"
+          class="bg-white dark:bg-slate-800 rounded-2xl shadow-sm overflow-hidden"
         >
           <!-- 项目头部 -->
           <div class="p-4" @contextmenu.prevent="openContextMenu($event, project)">
@@ -109,7 +109,7 @@
                     {{ statusLabel(project.status) }}
                   </span>
                   <h3
-                    class="text-base font-bold text-slate-800 truncate cursor-pointer hover:text-blue-600 transition-colors"
+                    class="text-base font-bold text-slate-800 dark:text-slate-200 truncate cursor-pointer hover:text-blue-600 transition-colors"
                     @click.stop="startEdit(project)"
                   >
                     {{ project.title }}
@@ -280,7 +280,7 @@
       <Transition name="fade">
         <div
           v-if="contextMenu.visible"
-          class="fixed z-[9999] bg-white rounded-xl shadow-2xl border border-slate-200 py-1 min-w-[140px]"
+          class="fixed z-[9999] bg-white dark:bg-slate-800 rounded-xl shadow-2xl border border-slate-200 dark:border-slate-700 py-1 min-w-[140px]"
           :style="{ left: contextMenu.x + 'px', top: contextMenu.y + 'px' }"
         >
           <button
@@ -289,6 +289,50 @@
           >
             <Trash2 :size="14" /> 删除项目
           </button>
+        </div>
+      </Transition>
+    </Teleport>
+
+    <!-- 自定义删除确认弹窗（替代 window.confirm） -->
+    <Teleport to="body">
+      <Transition name="fade">
+        <div
+          v-if="showDeleteConfirm && deleteTargetProjectId"
+          class="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-6"
+          @click="showDeleteConfirm = false"
+        >
+          <div
+            class="w-full max-w-sm bg-white dark:bg-slate-800 rounded-2xl p-5 space-y-4 animate-slide-up"
+            @click.stop
+          >
+            <div class="flex items-center gap-3">
+              <div class="w-10 h-10 rounded-full bg-red-50 flex items-center justify-center shrink-0">
+                <Trash2 :size="20" class="text-red-500" />
+              </div>
+              <div>
+                <h3 class="text-base font-semibold text-slate-800 dark:text-slate-100">确认删除</h3>
+                <p class="text-xs text-slate-400 mt-0.5">
+                  确定要删除该项目吗？所有子任务也将被删除。
+                </p>
+              </div>
+            </div>
+            <div class="flex gap-3">
+              <button
+                class="flex-1 py-2.5 rounded-xl text-sm font-medium bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 active:bg-slate-200 transition-colors"
+                style="min-height: 44px;"
+                @click="showDeleteConfirm = false; deleteTargetProjectId = null"
+              >
+                取消
+              </button>
+              <button
+                class="flex-1 py-2.5 rounded-xl text-sm font-medium bg-red-500 text-white active:bg-red-600 transition-colors shadow-lg shadow-red-500/25"
+                style="min-height: 44px;"
+                @click="executeDelete"
+              >
+                确认删除
+              </button>
+            </div>
+          </div>
         </div>
       </Transition>
     </Teleport>
@@ -377,6 +421,10 @@ const contextMenu = ref({
   projectId: null as string | null,
 })
 
+// 自定义删除确认弹窗（替代 window.confirm）
+const showDeleteConfirm = ref(false)
+const deleteTargetProjectId = ref<string | null>(null)
+
 // ==================== 可用路径列表（用于关联） ====================
 
 const availableTopics = computed<StudyTopic[]>(() => {
@@ -460,17 +508,28 @@ function startEdit(project: Project): void {
   })
 }
 
-/** 删除项目 */
-function confirmDelete(projectId: string): void {
+/** 删除项目 - 显示自定义确认弹窗（替代 window.confirm） */
+function confirmDelete(projectId: string) {
   const project = projects.value.find(p => p.id === projectId)
   if (!project) return
-  if (!window.confirm(`确定删除「${project.title}」吗？\n该项目的所有子任务也将被删除。`)) return
+  deleteTargetProjectId.value = projectId
+  showDeleteConfirm.value = true
+}
+
+/** 执行删除操作 */
+function executeDelete() {
+  const projectId = deleteTargetProjectId.value
+  if (!projectId) return
 
   projects.value = projects.value.filter(p => p.id !== projectId)
   expandedProjects.value.delete(projectId)
   expandedProjects.value = new Set(expandedProjects.value)
   saveProjects(projects.value)
   showToast('已删除项目', 'info')
+
+  // 关闭弹窗
+  showDeleteConfirm.value = false
+  deleteTargetProjectId.value = null
 }
 
 // ==================== 展开/折叠 ====================

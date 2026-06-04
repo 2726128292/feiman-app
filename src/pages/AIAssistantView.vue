@@ -1,5 +1,5 @@
 <template>
-  <div class="min-h-screen bg-slate-50 pb-24">
+  <div class="min-h-screen bg-slate-50 dark:bg-slate-900 pb-24">
     <div class="max-w-md mx-auto px-5 pt-6 flex flex-col" style="height: 100dvh;">
       <!-- 顶部标题 -->
       <div class="flex items-center gap-3 mb-4 shrink-0">
@@ -7,7 +7,7 @@
           <Sparkles :size="20" class="text-white" />
         </div>
         <div class="flex-1 min-w-0">
-          <h1 class="text-lg font-bold text-slate-900">AI 学习助手</h1>
+          <h1 class="text-lg font-bold text-slate-900 dark:text-slate-100">AI 学习助手</h1>
           <p class="text-xs mt-0.5" :class="isAIReady ? 'text-emerald-500' : 'text-slate-400'">
             {{ isAIReady ? 'DeepSeek 已连接' : isAIEnabled ? '未配置 API Key · 本地模式' : 'AI 已关闭 · 本地模式' }}
           </p>
@@ -24,7 +24,7 @@
       <!-- 上传面板 -->
       <div
         v-if="showUploadPanel"
-        class="bg-white rounded-2xl shadow-sm p-4 mb-4 shrink-0 animate-fade-up"
+        class="bg-white dark:bg-slate-800 rounded-2xl shadow-sm p-4 mb-4 shrink-0 animate-fade-up"
       >
         <h3 class="text-sm font-semibold text-slate-700 mb-2">上传学习资料</h3>
         <p class="text-[11px] text-slate-400 mb-3">上传后 AI 将基于你的资料回答问题</p>
@@ -84,7 +84,7 @@
             <button
               v-for="quick in quickQuestions"
               :key="quick"
-              class="px-3 py-2 rounded-xl bg-white shadow-sm text-xs text-slate-600 active:bg-slate-50 text-left"
+              class="px-3 py-2 rounded-xl bg-white dark:bg-slate-800 shadow-sm text-xs text-slate-600 dark:text-slate-400 active:bg-slate-50 dark:active:bg-slate-700 text-left"
               @click="sendMessage(quick)"
             >{{ quick }}</button>
           </div>
@@ -102,7 +102,7 @@
             :class="
               msg.role === 'user'
                 ? 'bg-[#4F6EF7] text-white rounded-br-md'
-                : 'bg-white shadow-sm text-slate-800 rounded-bl-md'
+                : 'bg-white dark:bg-slate-800 shadow-sm text-slate-800 dark:text-slate-200 rounded-bl-md'
             "
           >
             <p class="whitespace-pre-wrap">{{ msg.content }}</p>
@@ -116,7 +116,7 @@
 
         <!-- 加载中 -->
         <div v-if="isWaiting" class="flex justify-start">
-          <div class="bg-white shadow-sm rounded-2xl rounded-bl-md px-4 py-3">
+          <div class="bg-white dark:bg-slate-800 shadow-sm rounded-2xl rounded-bl-md px-4 py-3">
             <div class="flex items-center gap-1.5">
               <div class="w-2 h-2 rounded-full bg-slate-300 animate-bounce" style="animation-delay: 0ms" />
               <div class="w-2 h-2 rounded-full bg-slate-300 animate-bounce" style="animation-delay: 150ms" />
@@ -127,13 +127,13 @@
       </div>
 
       <!-- 输入区域 -->
-      <div class="shrink-0 pt-3 border-t border-slate-100 bg-white/80 backdrop-blur -mx-5 px-5 pb-4">
+      <div class="shrink-0 pt-3 border-t border-slate-100 dark:border-slate-700 bg-white/80 dark:bg-slate-800/80 backdrop-blur -mx-5 px-5 pb-4">
         <div class="flex items-end gap-2">
           <textarea
             v-model="inputText"
             placeholder="输入问题..."
             rows="1"
-            class="flex-1 resize-none rounded-xl border border-slate-200 px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 max-h-24"
+            class="flex-1 resize-none rounded-xl border border-slate-200 dark:border-slate-600 px-3.5 py-2.5 text-sm text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 max-h-24 placeholder:text-slate-400"
             @keydown.enter.exact.prevent="handleSend"
             @input="autoResize"
           />

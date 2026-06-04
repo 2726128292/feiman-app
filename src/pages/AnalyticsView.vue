@@ -1,18 +1,18 @@
 <template>
-  <div class="min-h-screen bg-slate-50 pb-24">
+  <div class="min-h-screen bg-slate-50 dark:bg-slate-900 pb-24">
     <div class="max-w-md mx-auto px-5 pt-6 space-y-4">
       <!-- 顶部标题区 -->
       <div>
-        <h1 class="text-2xl font-bold text-slate-900">学习分析</h1>
+        <h1 class="text-2xl font-bold text-slate-900 dark:text-slate-100">学习分析</h1>
         <p class="text-sm text-slate-500 mt-0.5">多维度追踪理解质量</p>
       </div>
 
       <!-- 空状态 -->
-      <div v-if="isEmpty" class="bg-white rounded-2xl shadow-sm p-8 text-center space-y-3">
-        <div class="w-16 h-16 rounded-full bg-slate-100 flex items-center justify-center mx-auto">
+      <div v-if="isEmpty" class="bg-white dark:bg-slate-800 rounded-2xl shadow-sm p-8 text-center space-y-3">
+        <div class="w-16 h-16 rounded-full bg-slate-100 dark:bg-slate-700 flex items-center justify-center mx-auto">
           <span class="text-3xl">📊</span>
         </div>
-        <h3 class="text-base font-semibold text-slate-800">还没有学习数据</h3>
+        <h3 class="text-base font-semibold text-slate-800 dark:text-slate-200">还没有学习数据</h3>
         <p class="text-xs text-slate-500 leading-relaxed max-w-xs mx-auto">
           完成第一次讲解或闪卡复习后，这里将展示你的学习分析报告。开始你的费曼学习之旅吧！
         </p>
@@ -31,7 +31,7 @@
           <div
             v-for="(metric, index) in metrics"
             :key="index"
-            class="bg-white rounded-2xl shadow-sm p-4"
+            class="bg-white dark:bg-slate-800 rounded-2xl shadow-sm p-4"
           >
             <p class="text-xs text-slate-400 mb-1">{{ metric.label }}</p>
             <div class="flex items-baseline gap-2">
@@ -111,8 +111,8 @@
         </div>
 
         <!-- 热力日历 -->
-        <div class="bg-white rounded-2xl shadow-sm p-4">
-          <h2 class="text-base font-bold text-slate-800 mb-4">热力日历</h2>
+        <div class="bg-white dark:bg-slate-800 rounded-2xl shadow-sm p-4">
+          <h2 class="text-base font-bold text-slate-800 dark:text-slate-200 mb-4">热力日历</h2>
           <!-- 星期标题行 -->
           <div class="grid grid-cols-7 gap-1.5 mb-1.5">
             <span
@@ -152,9 +152,9 @@
 
         <!-- ====== 功能16：日期详情面板 ====== -->
         <Transition name="fade">
-          <div v-if="selectedDate" class="mt-3 bg-white rounded-xl p-4 shadow-sm">
+          <div v-if="selectedDate" class="mt-3 bg-white dark:bg-slate-800 rounded-xl p-4 shadow-sm">
             <div class="flex items-center justify-between mb-3">
-              <h4 class="text-sm font-bold text-slate-700">{{ selectedDateDetail.date }}</h4>
+              <h4 class="text-sm font-bold text-slate-700 dark:text-slate-300">{{ selectedDateDetail.date }}</h4>
               <button class="text-slate-400 hover:text-slate-600" @click="selectedDate = null">
                 <X :size="16" />
               </button>
@@ -179,13 +179,13 @@
         </Transition>
 
         <!-- 本月建议 -->
-        <div class="bg-white rounded-2xl shadow-sm p-4">
+        <div class="bg-white dark:bg-slate-800 rounded-2xl shadow-sm p-4">
           <div class="flex items-start gap-3">
-            <div class="w-10 h-10 rounded-xl bg-amber-50 flex items-center justify-center shrink-0">
+            <div class="w-10 h-10 rounded-xl bg-amber-50 dark:bg-amber-900/20 flex items-center justify-center shrink-0">
               <Lightbulb :size="20" class="text-amber-500" />
             </div>
             <div>
-              <h3 class="text-base font-semibold text-slate-800">本月建议</h3>
+              <h3 class="text-base font-semibold text-slate-800 dark:text-slate-200">本月建议</h3>
               <p class="text-xs text-slate-500 mt-1.5 leading-relaxed">
                 {{ suggestionText }}
               </p>

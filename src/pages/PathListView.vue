@@ -1,9 +1,9 @@
 <template>
-  <div class="min-h-screen bg-slate-50 pb-24">
+  <div class="min-h-screen bg-slate-50 dark:bg-slate-900 pb-24">
     <div class="max-w-md mx-auto px-5 pt-6 space-y-4">
       <!-- 顶部标题区 -->
       <div>
-        <h1 class="text-2xl font-bold text-slate-900">学习路径</h1>
+        <h1 class="text-2xl font-bold text-slate-900 dark:text-slate-100">学习路径</h1>
         <p class="text-sm text-slate-500 mt-0.5">用路线拆解大目标</p>
       </div>
 
@@ -17,12 +17,33 @@
           v-model="searchQuery"
           type="text"
           placeholder="搜索课程、主题、知识点"
-          class="w-full pl-10 pr-4 py-3 rounded-xl bg-white border border-slate-200 text-sm placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 transition-all"
+          class="w-full pl-10 pr-4 py-3 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-sm text-slate-700 dark:text-slate-300 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 transition-all"
         />
       </div>
 
+      <!-- 空状态提示（无路径时） -->
+      <div v-if="allTopics.length === 0" class="text-center py-16">
+        <BookOpen :size="48" class="mx-auto text-slate-200 dark:text-slate-700 mb-3" />
+        <p class="text-sm text-slate-400 dark:text-slate-500">还没有学习路径</p>
+        <p class="text-xs text-slate-300 dark:text-slate-600 mt-1">创建你的第一个学习路径吧</p>
+        <button
+          class="mt-4 px-5 py-2.5 rounded-full bg-emerald-500 text-white text-sm font-semibold shadow-lg shadow-emerald-500/25 active:scale-[0.98] transition-transform duration-150"
+          style="min-height: 44px;"
+          @click="router.push('/paths/create')"
+        >
+          创建第一个路径
+        </button>
+      </div>
+
+      <!-- 搜索无结果提示 -->
+      <div v-if="allTopics.length > 0 && filteredTopics.length === 0" class="text-center py-16">
+        <Search :size="48" class="mx-auto text-slate-200 dark:text-slate-700 mb-3" />
+        <p class="text-sm text-slate-400 dark:text-slate-500">未找到匹配的学习路径</p>
+        <p class="text-xs text-slate-300 dark:text-slate-600 mt-1">试试其他关键词</p>
+      </div>
+
       <!-- 学习主题卡片列表 -->
-      <div class="space-y-3">
+      <div v-if="filteredTopics.length > 0" class="space-y-3">
         <div
           v-for="topic in filteredTopics"
           :key="topic.id"
@@ -66,7 +87,7 @@
             </div>
             <!-- 标题 + 标签 + 进度条 -->
             <div class="flex-1 min-w-0">
-              <h3 class="text-base font-semibold text-slate-900 truncate">{{ topic.title }}</h3>
+              <h3 class="text-base font-semibold text-slate-900 dark:text-slate-100 truncate">{{ topic.title }}</h3>
               <div class="flex gap-1.5 mt-1 mb-2">
                 <span
                   v-for="tag in topic.tags"
@@ -114,6 +135,50 @@
           </div>
         </div>
       </div>
+
+      <!-- 自定义删除确认弹窗（替代 window.confirm） -->
+      <Teleport to="body">
+        <Transition name="fade">
+          <div
+            v-if="showDeleteConfirm && deleteTargetTopic"
+            class="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-6"
+            @click="showDeleteConfirm = false"
+          >
+            <div
+              class="w-full max-w-sm bg-white dark:bg-slate-800 rounded-2xl p-5 space-y-4 animate-slide-up"
+              @click.stop
+            >
+              <div class="flex items-center gap-3">
+                <div class="w-10 h-10 rounded-full bg-red-50 flex items-center justify-center shrink-0">
+                  <Trash2 :size="20" class="text-red-500" />
+                </div>
+                <div>
+                  <h3 class="text-base font-semibold text-slate-800 dark:text-slate-100">确认删除</h3>
+                  <p class="text-xs text-slate-400 mt-0.5">
+                    确定要删除「{{ deleteTargetTopic.title }}」这条学习路径吗？
+                  </p>
+                </div>
+              </div>
+              <div class="flex gap-3">
+                <button
+                  class="flex-1 py-2.5 rounded-xl text-sm font-medium bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 active:bg-slate-200 transition-colors"
+                  style="min-height: 44px;"
+                  @click="showDeleteConfirm = false; deleteTargetTopic = null"
+                >
+                  取消
+                </button>
+                <button
+                  class="flex-1 py-2.5 rounded-xl text-sm font-medium bg-red-500 text-white active:bg-red-600 transition-colors shadow-lg shadow-red-500/25"
+                  style="min-height: 44px;"
+                  @click="executeDeleteTopic"
+                >
+                  确认删除
+                </button>
+              </div>
+            </div>
+          </div>
+        </Transition>
+      </Teleport>
     </div>
   </div>
 </template>
@@ -129,6 +194,37 @@ const router = useRouter()
 
 // 获取全局 Toast（用于右滑标记提示）
 const showToast = inject<(msg: string, type?: string) => void>('toast')
+
+// 自定义删除确认弹窗状态
+const showDeleteConfirm = ref(false)
+const deleteTargetTopic = ref<StudyTopic | null>(null)
+
+/** 显示删除确认弹窗 */
+function confirmDeleteTopic(topic: StudyTopic) {
+  deleteTargetTopic.value = topic
+  showDeleteConfirm.value = true
+}
+
+/** 执行删除操作：从列表移除 → 持久化到 localStorage → Toast 提示 */
+function executeDeleteTopic() {
+  const topic = deleteTargetTopic.value
+  if (!topic) return
+
+  const idx = allTopics.value.findIndex((t) => t.id === topic.id)
+  if (idx !== -1) {
+    allTopics.value.splice(idx, 1)
+    // 同步到 localStorage（持久化删除）
+    try {
+      localStorage.setItem('feiman_topics', JSON.stringify(allTopics.value))
+    } catch { /* 忽略 */ }
+    // 删除成功提示（显示被删除的路径名称）
+    showToast?.(`已删除「${topic.title}」`, 'warning')
+  }
+
+  // 关闭弹窗并清理状态
+  showDeleteConfirm.value = false
+  deleteTargetTopic.value = null
+}
 
 // ==================== 滑动手势跟踪 ====================
 
@@ -167,18 +263,10 @@ function handleSwipeMove(id: string, e: TouchEvent) {
 function handleSwipeEnd(id: string) {
   const x = swipeMaps.value[id] || 0
   if (x <= -80) {
-    // 左滑删除：从列表中移除该主题
-    const idx = allTopics.value.findIndex((t) => t.id === id)
-    if (idx !== -1) {
-      const topic = allTopics.value[idx]
-      const confirmed = window.confirm(`确定要删除「${topic.title}」这条学习路径吗？`)
-      if (confirmed) {
-        allTopics.value.splice(idx, 1)
-        // 同步到 localStorage
-        try {
-          localStorage.setItem('feiman_topics', JSON.stringify(allTopics.value))
-        } catch { /* 忽略 */ }
-      }
+    // 左滑删除：显示自定义确认弹窗（替代 window.confirm）
+    const topic = allTopics.value.find((t) => t.id === id)
+    if (topic) {
+      confirmDeleteTopic(topic)
     }
   } else if (x >= 80) {
     // 右滑标记完成
@@ -222,3 +310,31 @@ const filteredTopics = computed(() => {
   )
 })
 </script>
+
+<style scoped>
+/* 底部弹出动画 */
+@keyframes slide-up {
+  from {
+    transform: translateY(100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+.animate-slide-up {
+  animation: slide-up 0.25s ease-out;
+}
+
+/* 淡入淡出（用于删除确认弹窗） */
+.fade-enter-active,
+.fade-leave-active {
+  transition: opacity 0.2s ease;
+}
+.fade-enter-from,
+.fade-leave-to {
+  opacity: 0;
+}
+</style>

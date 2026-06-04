@@ -72,7 +72,7 @@
           <p class="text-xl font-bold text-emerald-600">{{ avgScore }}</p>
           <p class="text-[11px] text-slate-400">平均分</p>
         </div>
-        <div class="flex-1 bg-white rounded-2xl shadow-sm p-3 text-center">
+        <div class="flex-1 bg-white dark:bg-slate-800 rounded-2xl shadow-sm p-3 text-center">
           <p class="text-xl font-bold text-amber-500">{{ voiceCount }}</p>
           <p class="text-[11px] text-slate-400">语音讲解</p>
         </div>
@@ -147,16 +147,23 @@
 
       <!-- 空状态提示（当没有记录时） -->
       <div v-if="sessions.length === 0" class="text-center py-16">
-        <BookOpen :size="48" class="mx-auto text-slate-200 mb-3" />
-        <p class="text-sm text-slate-400">还没有讲解记录</p>
-        <p class="text-xs text-slate-300 mt-1">开始你的第一次费曼讲解吧</p>
+        <BookOpen :size="48" class="mx-auto text-slate-200 dark:text-slate-700 mb-3" />
+        <p class="text-sm text-slate-400 dark:text-slate-500">还没有讲解记录</p>
+        <p class="text-xs text-slate-300 dark:text-slate-600 mt-1">开始你的第一次费曼讲解吧</p>
+        <button
+          class="mt-4 px-5 py-2.5 rounded-full bg-[#4F6EF7] text-white text-sm font-semibold shadow-lg shadow-blue-500/25 active:scale-[0.98] transition-transform duration-150"
+          style="min-height: 44px;"
+          @click="router.push('/explain/new')"
+        >
+          去讲解
+        </button>
       </div>
 
       <!-- 搜索无结果提示 -->
       <div v-if="sessions.length > 0 && filteredSessions.length === 0" class="text-center py-16">
-        <Search :size="48" class="mx-auto text-slate-200 mb-3" />
-        <p class="text-sm text-slate-400">未找到匹配的记录</p>
-        <p class="text-xs text-slate-300 mt-1">试试其他关键词</p>
+        <Search :size="48" class="mx-auto text-slate-200 dark:text-slate-700 mb-3" />
+        <p class="text-sm text-slate-400 dark:text-slate-500">未找到匹配的讲解记录</p>
+        <p class="text-xs text-slate-300 dark:text-slate-600 mt-1">试试其他关键词</p>
       </div>
 
       <!-- 长按弹出菜单（操作浮层） -->
@@ -196,6 +203,50 @@
             </button>
           </div>
         </div>
+      </Teleport>
+
+      <!-- 自定义删除确认弹窗（替代 window.confirm） -->
+      <Teleport to="body">
+        <Transition name="fade">
+          <div
+            v-if="showDeleteConfirm && deleteTargetSession"
+            class="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-6"
+            @click="showDeleteConfirm = false"
+          >
+            <div
+              class="w-full max-w-sm bg-white dark:bg-slate-800 rounded-2xl p-5 space-y-4 animate-slide-up"
+              @click.stop
+            >
+              <div class="flex items-center gap-3">
+                <div class="w-10 h-10 rounded-full bg-red-50 flex items-center justify-center shrink-0">
+                  <Trash2 :size="20" class="text-red-500" />
+                </div>
+                <div>
+                  <h3 class="text-base font-semibold text-slate-800 dark:text-slate-100">确认删除</h3>
+                  <p class="text-xs text-slate-400 mt-0.5">
+                    确定要删除「{{ deleteTargetSession.topicName }}」这条讲解记录吗？
+                  </p>
+                </div>
+              </div>
+              <div class="flex gap-3">
+                <button
+                  class="flex-1 py-2.5 rounded-xl text-sm font-medium bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 active:bg-slate-200 transition-colors"
+                  style="min-height: 44px;"
+                  @click="showDeleteConfirm = false; deleteTargetSession = null"
+                >
+                  取消
+                </button>
+                <button
+                  class="flex-1 py-2.5 rounded-xl text-sm font-medium bg-red-500 text-white active:bg-red-600 transition-colors shadow-lg shadow-red-500/25"
+                  style="min-height: 44px;"
+                  @click="executeDelete"
+                >
+                  确认删除
+                </button>
+              </div>
+            </div>
+          </div>
+        </Transition>
       </Teleport>
     </div>
   </div>
@@ -309,6 +360,10 @@ const showMenu = ref(false)
 
 /** 当前长按选中的会话 */
 const menuSession = ref<DisplaySession | null>(null)
+
+/** 自定义删除确认弹窗 */
+const showDeleteConfirm = ref(false)
+const deleteTargetSession = ref<DisplaySession | null>(null)
 
 /** 长按计时相关 */
 let touchStartTime = 0
@@ -527,11 +582,17 @@ function viewDetail(session: DisplaySession) {
   router.push('/explain/new')
 }
 
-/** 删除确认并执行删除 */
+/** 删除确认 - 显示自定义弹窗（替代 window.confirm） */
 function confirmDelete(session: DisplaySession) {
   closeMenu()
-  const confirmed = window.confirm(`确定要删除「${session.topicName}」这条讲解记录吗？`)
-  if (!confirmed) return
+  deleteTargetSession.value = session
+  showDeleteConfirm.value = true
+}
+
+/** 执行删除操作 */
+function executeDelete() {
+  const session = deleteTargetSession.value
+  if (!session) return
 
   // 删除前保存当前状态到撤销栈
   execute(sessions.value as any)
@@ -545,6 +606,10 @@ function confirmDelete(session: DisplaySession) {
   // 同步回 localStorage
   saveToStorage()
   showToast?.('已删除 · 按 Ctrl+Z 可恢复', 'warning')
+
+  // 关闭弹窗
+  showDeleteConfirm.value = false
+  deleteTargetSession.value = null
 }
 
 /** 将当前会话列表写回 localStorage */
@@ -595,5 +660,15 @@ onUnmounted(() => {
 
 .animate-slide-up {
   animation: slide-up 0.25s ease-out;
+}
+
+/* 淡入淡出（用于删除确认弹窗） */
+.fade-enter-active,
+.fade-leave-active {
+  transition: opacity 0.2s ease;
+}
+.fade-enter-from,
+.fade-leave-to {
+  opacity: 0;
 }
 </style>

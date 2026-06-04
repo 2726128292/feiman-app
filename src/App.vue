@@ -105,6 +105,12 @@
         </div>
       </Transition>
     </Teleport>
+
+    <!-- 全局快捷创建闪卡按钮 -->
+    <QuickCardFab />
+
+    <!-- PWA 安装引导 -->
+    <PWAPrompt />
   </div>
 </template>
 

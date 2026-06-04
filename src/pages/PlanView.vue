@@ -451,7 +451,7 @@ function getTodayDateString(): string {
 }
 
 /**
- * 从 localStorage 统计今日学习数据
+ * 从 localStorage 统计今日学习数据（动态读取，非 mock 值）
  * 包含：讲解次数、复习卡数、专注时长、连续天数
  */
 const todayStats = computed(() => {
@@ -464,11 +464,10 @@ const todayStats = computed(() => {
     if (sessionsData) {
       const sessions = JSON.parse(sessionsData)
       if (Array.isArray(sessions)) {
-        // 假设 session 有 createdAt 或 created_at 字段包含日期信息
-        // 如果没有日期字段，则统计所有记录（降级处理）
+        // session 可能有 createdAt / created_at / date 字段包含日期信息
         explainCount = sessions.filter((s: any) => {
-          const createdAt = s.createdAt || s.created_at || s.date
-          return createdAt && createdAt.toString().startsWith(today)
+          const createdAt = s.createdAt || s.created_at || s.date || ''
+          return createdAt.toString().startsWith(today)
         }).length
       }
     }
@@ -476,13 +475,13 @@ const todayStats = computed(() => {
     // JSON 解析失败时忽略
   }
 
-  // 2. 复习卡数：从 feiman_daily_stats 读取今日复习数量
+  // 2. 复习卡数：优先从 feiman_daily_stats 读取，其次从 feiman_review_cards 中统计今天有变化的卡片
   let reviewCards = 0
   try {
+    // 方案一：从每日统计中读取
     const dailyStatsData = localStorage.getItem('feiman_daily_stats')
     if (dailyStatsData) {
       const dailyStats = JSON.parse(dailyStatsData)
-      // dailyStats 可以是对象或数组，查找今天的记录
       if (Array.isArray(dailyStats)) {
         const todayStat = dailyStats.find((s: any) => s.date === today)
         reviewCards = todayStat?.reviewCount || 0
@@ -492,17 +491,38 @@ const todayStats = computed(() => {
         reviewCards = dailyStats[today].reviewCount || 0
       }
     }
+
+    // 方案二：若每日统计无数据，则从复习卡片中统计今天被复习过的卡片数（reviewCount > 0 且 createdAt 是今天或 nextReview 有更新）
+    if (reviewCards === 0) {
+      for (const key of ['feiman_review_cards', 'feiman_cards']) {
+        const cardsRaw = localStorage.getItem(key)
+        if (cardsRaw) {
+          const cards = JSON.parse(cardsRaw)
+          if (Array.isArray(cards)) {
+            // 统计今天有复习活动的卡片：reviewCount > 0 且 lastReview 日期为今天
+            reviewCards = cards.filter((c: any) => {
+              const lastReview = c.lastReview || c.reviewedAt || ''
+              return c.reviewCount > 0 && lastReview.toString().startsWith(today)
+            }).length
+            if (reviewCards > 0) break // 找到数据就停止
+          }
+        }
+      }
+    }
   } catch {
     // JSON 解析失败时忽略
   }
 
-  // 3. 专注时长：基于番茄钟完成次数 × 25分钟
+  // 3. 专注时长：从 feiman_pomodoro_history 读取今日总分钟数（与上方番茄钟统计数据源一致）
   let focusMinutes = 0
   try {
-    const pomodoroCount = localStorage.getItem('feiman_pomodoro_count')
-    if (pomodoroCount) {
-      const count = parseInt(pomodoroCount, 10)
-      focusMinutes = isNaN(count) ? 0 : count * 25
+    const historyRaw = localStorage.getItem('feiman_pomodoro_history')
+    if (historyRaw) {
+      const history = JSON.parse(historyRaw)
+      if (Array.isArray(history)) {
+        const todayRecord = history.find((r: PomodoroRecord) => r.date === today)
+        focusMinutes = todayRecord?.minutes || 0
+      }
     }
   } catch {
     // 解析失败时默认为0

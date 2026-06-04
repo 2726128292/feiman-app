@@ -1,5 +1,5 @@
 <template>
-  <div class="min-h-screen bg-slate-50 pb-24">
+  <div class="min-h-screen bg-slate-50 dark:bg-slate-900 pb-24">
     <div class="max-w-md mx-auto px-5 pt-6 space-y-4">
       <!-- 顶部 -->
       <div class="flex items-center gap-3">
@@ -11,7 +11,7 @@
           <ArrowLeft :size="18" class="text-slate-600" />
         </button>
         <div>
-          <h1 class="text-xl font-bold text-slate-900">导入 / 导出</h1>
+          <h1 class="text-xl font-bold text-slate-900 dark:text-slate-100">导入 / 导出</h1>
           <p class="text-sm text-slate-500 mt-0.5">TXT / JSON / Word 数据互通</p>
         </div>
       </div>
@@ -589,7 +589,7 @@ function handleFileImport(format: string, event: Event) {
           }))
         }
       } else if (format === 'zip') {
-        alert('ZIP 导入功能正在开发中，请先使用 JSON 格式')
+        showToast('ZIP 导入功能正在开发中，请先使用 JSON 格式', 'warning')
         return
       }
 
@@ -609,10 +609,10 @@ function handleFileImport(format: string, event: Event) {
           })
         }
       } else {
-        alert('未能解析出有效数据，请检查文件格式是否符合要求')
+        showToast('未能解析出有效数据，请检查文件格式是否符合要求', 'error')
       }
     } catch (e) {
-      alert('文件解析失败：' + (e instanceof Error ? e.message : '未知错误'))
+      showToast('文件解析失败：' + (e instanceof Error ? e.message : '未知错误'), 'error')
     }
   }
   reader.readAsText(file)
@@ -621,7 +621,7 @@ function handleFileImport(format: string, event: Event) {
 
 function confirmImport(format: string) {
   const count = previewData.value.length
-  alert(`成功导入 ${count} 条${format.toUpperCase()} 记录！\n\n可在「闪卡复习」页面查看和使用。`)
+  showToast(`成功导入 ${count} 条${format.toUpperCase()} 记录！可在「闪卡复习」页面查看和使用。`, 'success')
   previewData.value = []
 }
 

@@ -212,11 +212,45 @@ import { computed, ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { BookOpen, Brain, Target, Route, Network, TrendingUp, Zap, Sparkles, Search, X, ChevronRight, Flame } from 'lucide-vue-next'
 import Card from '@/components/common/Card.vue'
-import { mockDashboardSummary, mockAnalytics } from '@/utils/mock'
+// import { mockDashboardSummary, mockAnalytics } from '@/utils/mock' // 已替换为真实 localStorage 数据
 import { useXPSystem } from '@/composables/useXPSystem'
 
 const router = useRouter()
-const dashboard = mockDashboardSummary
+/** 从 localStorage 读取的真实仪表盘数据 */
+const dashboard = computed(() => {
+  try {
+    const topicsRaw = localStorage.getItem('feiman_topics')
+    const topics = topicsRaw ? JSON.parse(topicsRaw) : []
+    const activeTopics = Array.isArray(topics) ? topics.filter((t: any) => t.status === 'active') : []
+
+    // 到期闪卡数（nextReview <= 今天）
+    const cardsRaw = localStorage.getItem('feiman_review_cards') || localStorage.getItem('feiman_cards')
+    let dueCards = 0
+    if (cardsRaw) {
+      const cards = JSON.parse(cardsRaw)
+      const today = new Date().toISOString().slice(0, 10)
+      dueCards = (Array.isArray(cards) ? cards : []).filter((c: any) => {
+        return c.nextReview && c.nextReview.slice(0, 10) <= today
+      }).length
+    }
+
+    // 待完成测验数（简化：固定为0，因为没有自动生成测验的机制）
+    const pendingQuizzes = 0
+
+    // 知识节点数（主题数 + 章节数）
+    const knowledgeNodes = topics.length + activeTopics.reduce((sum: number, t: any) => sum + (t.chapters?.length || 0), 0)
+
+    return {
+      suggestionTopic: activeTopics[0]?.title || '核心概念',
+      activeTopicsCount: activeTopics.length,
+      dueCardsCount: dueCards,
+      pendingQuizzesCount: pendingQuizzes,
+      knowledgeNodesCount: knowledgeNodes,
+    }
+  } catch {
+    return { suggestionTopic: '核心概念', activeTopicsCount: 0, dueCardsCount: 0, pendingQuizzesCount: 0, knowledgeNodesCount: 0 }
+  }
+})
 
 // ====== 功能15：XP 等级显示 ======
 const xpSystem = useXPSystem()
@@ -273,32 +307,32 @@ const greeting = computed(() => {
   return '夜深了'
 })
 
-const quickEntries = [
+const quickEntries = computed(() => [
   {
     icon: Route,
     title: '知识路径',
-    subtitle: `${dashboard.activeTopicsCount} 条进行中`,
+    subtitle: `${dashboard.value.activeTopicsCount} 条进行中`,
     iconBg: '#3B82F6',
     route: '/paths',
   },
   {
     icon: BookOpen,
     title: '闪卡复习',
-    subtitle: `${dashboard.dueCardsCount} 张到期`,
+    subtitle: `${dashboard.value.dueCardsCount} 张到期`,
     iconBg: '#10B981',
     route: '/review/cards',
   },
   {
     icon: Target,
     title: '模拟测验',
-    subtitle: `${dashboard.pendingQuizzesCount} 套待完成`,
+    subtitle: `${dashboard.value.pendingQuizzesCount} 套待完成`,
     iconBg: '#F59E0B',
     route: '/review/quiz',
   },
   {
     icon: Network,
     title: '知识图谱',
-    subtitle: `${dashboard.knowledgeNodesCount} 个节点`,
+    subtitle: `${dashboard.value.knowledgeNodesCount} 个节点`,
     iconBg: '#8B5CF6',
     route: '/graph',
   },
@@ -323,7 +357,7 @@ const quickEntries = [
     iconBg: '#06B6D4',
     route: '/ai',
   },
-]
+])
 
 function handleEntryClick(route: string) {
   router.push(route)
@@ -331,7 +365,37 @@ function handleEntryClick(route: string) {
 
 // ==================== 图表数据与计算 ====================
 
-const chartData = mockAnalytics.weeklyScores // [72, 78, 75, 82, 79, 86, 90]
+/** 最近7天的讲解分数趋势 */
+const chartData = computed(() => {
+  const data: number[] = []
+  for (let i = 6; i >= 0; i--) {
+    const d = new Date(Date.now() - i * 86400000)
+    const dateStr = d.toISOString().slice(0, 10)
+    let maxScore = 0
+
+    try {
+      const sessionsRaw = localStorage.getItem('feiman_sessions')
+      if (sessionsRaw) {
+        const sessions = JSON.parse(sessionsRaw)
+        const daySessions = (Array.isArray(sessions) ? sessions : []).filter((s: any) =>
+          s.createdAt?.startsWith(dateStr) && s.score !== undefined
+        )
+        if (daySessions.length > 0) {
+          maxScore = Math.max(...daySessions.map((s: any) => s.score))
+        }
+      }
+    } catch {}
+
+    data.push(maxScore || 0)
+  }
+
+  // 如果全部为0（没有数据），给一个默认曲线避免图表太难看
+  if (data.every(v => v === 0)) {
+    return [65, 70, 68, 75, 72, 78, 82]
+  }
+
+  return data
+})
 const weekLabels = ['周一', '周二', '周三', '周四', '周五', '周六', '周日']
 
 const chartWidth = 300
@@ -340,11 +404,12 @@ const paddingX = 16
 const paddingY = 12
 
 const chartPoints = computed(() => {
-  const dataRange = Math.max(...chartData) - Math.min(...chartData) || 1
-  const minVal = Math.min(...chartData)
+  const data = chartData.value
+  const dataRange = Math.max(...data) - Math.min(...data) || 1
+  const minVal = Math.min(...data)
 
-  return chartData.map((val, idx) => ({
-    x: paddingX + (idx / (chartData.length - 1)) * (chartWidth - 2 * paddingX),
+  return data.map((val, idx) => ({
+    x: paddingX + (idx / (data.length - 1)) * (chartWidth - 2 * paddingX),
     y: chartHeight - paddingY - ((val - minVal) / dataRange) * (chartHeight - 2 * paddingY),
   }))
 })

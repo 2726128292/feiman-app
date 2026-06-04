@@ -309,8 +309,8 @@ import { useXPSystem } from '@/composables/useXPSystem'
 const refreshContainerRef = ref<HTMLElement>()
 const { isPulling, isRefreshing, pullDistance, init } = usePullRefresh({
   onRefresh: () => {
-    // 从 localStorage 重新加载卡片数据
-    loadCardsFromStorage()
+    // 从 localStorage 重新加载卡片数据（兼容两个 key）
+    loadCards()
   },
 })
 
@@ -334,30 +334,56 @@ const createForm = reactive({
   topic: '前端工程化',
 })
 
-function saveNewCard() {
-  if (!createForm.question.trim()) return
-
-  const newCard: ReviewCard = {
-    id: crypto.randomUUID(),
-    topicId: createForm.topic,
-    question: createForm.question.trim(),
-    answer: createForm.answer.trim() || '(待补充)',
-    dueAt: new Date().toISOString(),
-    interval: 1,
-    easeFactor: 2.5,
-    reviewCount: 0,
+/**
+ * A2：新建闪卡保存逻辑
+ * 1. 校验输入 → 2. 读取现有 cards → 3. 构建 SM-2 完整 card → 4. push 并写入 localStorage → 5. 刷新列表
+ */
+function saveNewCard(): void {
+  if (!createForm.question.trim()) {
+    showToast('请输入问题', 'warning')
+    return
   }
 
-  allCards.value.push(newCard)
-  // 自动选中新卡片所属主题
-  selectedTopics.add(createForm.topic)
+  // 构建包含完整 SM-2 字段的新卡片对象
+  const newCard = {
+    id: crypto.randomUUID(),
+    question: createForm.question.trim(),
+    answer: createForm.answer.trim() || '待补充答案',
+    tags: [createForm.topic || '默认'],
+    deck: 'default',
+    interval: 1,
+    easeFactor: 2.5,
+    repetition: 0,
+    nextReview: new Date(Date.now() + 86400000).toISOString(), // 明天
+    reviewCount: 0,
+    createdAt: new Date().toISOString(),
+    source: 'manual',
+    topicId: createForm.topic,
+    dueAt: new Date(Date.now() + 86400000).toISOString(),
+  }
 
-  // 显示成功提示
-  createSuccessMsg.value = '✅ 卡片创建成功！'
-  setTimeout(() => { createSuccessMsg.value = '' }, 2000)
+  // 读取现有卡片（兼容两个 key）
+  const raw = localStorage.getItem('feiman_review_cards') || localStorage.getItem('feiman_cards') || '[]'
+  const cards = JSON.parse(raw)
+  cards.push(newCard)
+
+  // 统一写入 feiman_review_cards
+  localStorage.setItem('feiman_review_cards', JSON.stringify(cards))
+
+  // 显示成功提示 + 获得经验值
+  showToast(`闪卡「${newCard.question}」已创建`, 'success')
+  xpSystem.gainXP('create_card')
 
   // 重置表单并关闭
-  cancelCreate()
+  createForm.question = ''
+  createForm.answer = ''
+  createForm.topic = '前端工程化'
+  showCreateForm.value = false
+  createSuccessMsg.value = '创建成功！'
+  setTimeout(() => { createSuccessMsg.value = '' }, 2000)
+
+  // 刷新列表（重新从 localStorage 加载）
+  loadCards()
 }
 
 function cancelCreate() {
@@ -455,13 +481,8 @@ function handleGlobalKeydown(e: KeyboardEvent): void {
   if ((e.ctrlKey || e.metaKey) && e.key === 'z' && !e.shiftKey) {
     e.preventDefault()
     if (undo()) {
-      // 撤销后从 localStorage 恢复数据
-      const restored = JSON.parse(localStorage.getItem('feiman_cards') || '[]')
-      if (restored.length > 0) {
-        const storedIds = new Set(restored.map((c: any) => c.id))
-        const remainingMock = mockCards.filter((c: ReviewCard) => !storedIds.has(c.id))
-        allCards.value = [...restored, ...remainingMock]
-      }
+      // 撤销后从 localStorage 重新加载卡片数据（兼容双 key）
+      loadCards()
       showToast('已撤销删除操作', 'info')
     }
   }
@@ -623,33 +644,72 @@ function flipCard() {
   setTimeout(() => { showAnswer.value = true }, 150)
 }
 
+/**
+ * A3：复习模式 rateCard 逻辑
+ * - "忘记" → quality=1 → 加入错题本 + SM-2 重置
+ * - "模糊" → quality=3 → SM-2 正常推进
+ * - "掌握" → quality=5 → SM-2 加速推进
+ * 评级后自动翻到下一张，最后一张显示完成摘要
+ */
 function rateCard(quality: 'forget' | 'hard' | 'easy') {
   triggerHaptic('medium') // 评级触觉反馈
+
+  // 评级映射：忘记=1, 模糊=3, 掌握=5
   const qualityMap: Record<string, number> = { forget: 1, hard: 3, easy: 5 }
   const q = qualityMap[quality]
 
+  const card = reviewCards.value[currentIndex.value]
+  if (!card) return
+
+  // 构造 SM-2 参数（使用 repetition 字段或 reviewCount 兼容）
   const params: SM2Params = {
-    interval: currentCard.value.interval,
-    easeFactor: currentCard.value.easeFactor,
-    repetition: currentCard.value.reviewCount,
+    interval: card.interval || 1,
+    easeFactor: card.easeFactor || 2.5,
+    repetition: card.repetition ?? card.reviewCount ?? 0,
   }
 
+  // 调用 SM-2 算法更新间隔参数
   const updated = updateSM2(params, q)
-  const card = reviewCards.value[currentIndex.value]
-  if (card) {
-    card.interval = updated.interval
-    card.easeFactor = updated.easeFactor
-    card.reviewCount = updated.repetition
 
-    // 忘记时自动加入错题本
-    if (quality === 'forget') {
-      addToWrongBook(card.id, card.topicId || '', card.question)
+  // 将更新写回卡片对象
+  card.interval = updated.interval
+  card.easeFactor = updated.easeFactor
+  card.reviewCount = updated.repetition
+  card.repetition = updated.repetition
+  // 更新下次复习时间
+  if (updated.interval > 0) {
+    card.nextReview = new Date(Date.now() + updated.interval * 86400000).toISOString()
+    card.dueAt = card.nextReview
+  }
+
+  // "忘记"时：将卡片加入错题本 + SM-2 重置为初始状态
+  if (quality === 'forget') {
+    addToWrongBook(card.id, card.topicId || '', card.question)
+    // SM-2 重置：interval 归 1，repetition 归 0
+    card.interval = 1
+    card.repetition = 0
+    card.nextReview = new Date(Date.now() + 86400000).toISOString()
+    card.dueAt = card.nextReview
+  }
+
+  // 持久化评级结果到 localStorage
+  try {
+    const raw = localStorage.getItem('feiman_review_cards') || localStorage.getItem('feiman_cards') || '[]'
+    const allStored = JSON.parse(raw)
+    const idx = allStored.findIndex((c: any) => c.id === card.id)
+    if (idx !== -1) {
+      allStored[idx] = { ...allStored[idx], ...card }
+      localStorage.setItem('feiman_review_cards', JSON.stringify(allStored))
     }
+  } catch {
+    // 持久化失败不影响流程继续
   }
 
   reviewedCount.value++
-  // ====== 功能15：复习闪卡获得 XP ======
+  // 复习闪卡获得 XP
   xpSystem.gainXP('flashcard_review')
+
+  // 自动翻到下一张（最后一张完成后显示摘要）
   nextCard()
 }
 
@@ -677,28 +737,43 @@ function skipCard() {
   }
 }
 
-// 从 localStorage 重新加载卡片数据（用于下拉刷新）
-function loadCardsFromStorage() {
-  try {
-    const cardsRaw = localStorage.getItem('feiman_cards')
-    if (cardsRaw) {
-      const stored = JSON.parse(cardsRaw)
-      if (Array.isArray(stored) && stored.length > 0) {
-        // 合并去重：以存储的数据为准，保留 mock 中不存在的
-        const storedIds = new Set(stored.map((c: any) => c.id))
-        // 保留不在存储中的 mock 卡片
-        const remainingMock = mockCards.filter((c: ReviewCard) => !storedIds.has(c.id))
-        allCards.value = [...stored, ...remainingMock]
+/**
+ * A4：统一 loadCards 函数
+ * 同时读取 feiman_review_cards 和 feiman_cards 两个 key（兼容旧数据）
+ * 合并去重后显示，无数据时降级到 mockCards
+ */
+function loadCards(): void {
+  const stored: any[] = []
+
+  // 读取两个可能的 key
+  for (const key of ['feiman_review_cards', 'feiman_cards']) {
+    try {
+      const raw = localStorage.getItem(key)
+      if (raw) {
+        const parsed = JSON.parse(raw)
+        if (Array.isArray(parsed)) stored.push(...parsed)
       }
+    } catch {
+      // 解析失败时跳过该 key
     }
-  } catch {
-    // 解析失败时保持当前数据
   }
+
+  // 以 id 去重（后面的数据优先）
+  const seen = new Set<string>()
+  const unique = stored.filter(c => {
+    if (!c.id || seen.has(c.id)) return false
+    seen.add(c.id)
+    return true
+  })
+
+  // 有真实数据则使用，否则降级到 mock 数据
+  allCards.value = unique.length > 0 ? unique : [...mockCards]
 }
 
-// 初始化加载错题本 + 下拉刷新绑定 + 撤销/重做快捷键
+// 初始化加载：错题本 + 卡片数据 + 下拉刷新绑定 + 撤销/重做快捷键
 onMounted(() => {
   loadWrongBook()
+  loadCards() // A4：初始化时统一加载卡片数据（兼容双 key）
   if (refreshContainerRef.value) {
     init(refreshContainerRef.value)
   }

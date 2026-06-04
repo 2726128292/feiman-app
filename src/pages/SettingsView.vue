@@ -546,9 +546,13 @@ const showPrivacyInfo = ref(false)
 const showToast = ref(false)
 const toastMessage = ref('')
 
+/**
+ * 重置引导页：清除所有引导/启动相关标记，下次打开将重新显示
+ */
 function handleResetSplash() {
   localStorage.removeItem('feiman_splash_seen')
   localStorage.removeItem('feiman_has_seen_splash')
+  localStorage.removeItem('feiman_onboarding_done') // 补充清除 onboarding 标记
   toastMessage.value = '已重置，下次打开将显示启动页'
   showToast.value = true
   setTimeout(() => { showToast.value = false }, 2000)
@@ -564,15 +568,31 @@ function maskKey(key: string): string {
   return key.slice(0, 6) + '****' + key.slice(-4)
 }
 
+/**
+ * 保存 DeepSeek API Key
+ * 校验格式（必须 sk- 开头）后写入 localStorage，并尝试连接验证
+ */
 async function saveKey() {
-  if (!apiKeyInput.value.trim()) return
-  updateAIConfig({ apiKey: apiKeyInput.value.trim() })
+  const key = apiKeyInput.value.trim()
+  if (!key) return
+
+  // 格式校验：DeepSeek Key 必须以 sk- 开头
+  if (!key.startsWith('sk-')) {
+    toastMessage.value = 'Key 格式不正确，应以 sk- 开头'
+    showToast.value = true
+    setTimeout(() => { showToast.value = false }, 2500)
+    return
+  }
+
+  updateAIConfig({ apiKey: key })
   showKeyInput.value = false
   apiKeyInput.value = ''
   try {
     await chat('你好', '费曼学习法App')
     alert('DeepSeek AI 连接成功！')
-  } catch { /* key saved but validation failed */ }
+  } catch {
+    // key 已保存但连接验证失败（可能网络问题），不影响使用
+  }
 }
 
 // 页面挂载时初始化推送状态和智能调度

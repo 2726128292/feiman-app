@@ -193,6 +193,16 @@ function generateLocalPath(goalName: string): StudyTopic {
     ]
   }
 
+  // 为每个章节初始化知识点子任务
+  chapters = chapters.map((ch, idx) => ({
+    ...ch,
+    items: [
+      { id: crypto.randomUUID(), title: `${ch.title} - 核心概念`, done: false },
+      { id: crypto.randomUUID(), title: `${ch.title} - 关键要点`, done: false },
+      { id: crypto.randomUUID(), title: `${ch.title} - 实践应用`, done: false },
+    ],
+  }))
+
   // 随机分配颜色
   const colors = ['#4F6EF7', '#10B981', '#F59E0B', '#8B5CF6', '#EC4899', '#06B6D4']
   const randomColor = colors[Math.floor(Math.random() * colors.length)]
@@ -270,6 +280,11 @@ async function handleGenerate() {
           title: ch.title || `章节 ${i + 1}`,
           completed: false,
           progress: 0,
+          items: [
+            { id: crypto.randomUUID(), title: `${ch.title || '章节 ' + (i+1)} - 核心概念`, done: false },
+            { id: crypto.randomUUID(), title: `${ch.title || '章节 ' + (i+1)} - 关键要点`, done: false },
+            { id: crypto.randomUUID(), title: `${ch.title || '章节 ' + (i+1)} - 实践应用`, done: false },
+          ],
         })),
         color: '#4F6EF7',
       }

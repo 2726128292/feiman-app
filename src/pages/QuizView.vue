@@ -1,14 +1,14 @@
 <template>
-  <div class="min-h-screen bg-slate-50 pb-24">
+  <div class="min-h-screen bg-slate-50 dark:bg-slate-900 pb-24">
     <div class="max-w-md mx-auto px-5 pt-6 space-y-5">
       <!-- 顶部标题 -->
       <div>
-        <h1 class="text-xl font-bold text-slate-900">模拟测验</h1>
+        <h1 class="text-xl font-bold text-slate-900 dark:text-slate-100">模拟测验</h1>
         <p class="text-sm text-slate-500 mt-0.5">根据薄弱点自动出题</p>
       </div>
 
       <!-- 进度条 -->
-      <div class="w-full h-2 bg-slate-200 rounded-full overflow-hidden">
+      <div class="w-full h-2 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden">
         <div
           class="h-full bg-[#4F6EF7] rounded-full transition-all duration-500"
           :style="{ width: progressPercent + '%' }"
@@ -21,7 +21,7 @@
           <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="3" opacity="0.25"/>
           <path d="M4 12a8 8 0 018-8" stroke="currentColor" stroke-width="3" stroke-linecap="round"/>
         </svg>
-        <p class="text-sm text-slate-500 mt-2">AI 正在生成测验题目...</p>
+        <p class="text-sm text-slate-500 dark:text-slate-400 mt-2">AI 正在生成测验题目...</p>
       </div>
 
       <!-- 题目区域（加载完成后显示） -->
@@ -33,7 +33,7 @@
       </p>
 
       <!-- 题目文字 -->
-      <p class="text-lg font-bold text-slate-900 leading-relaxed">
+      <p class="text-lg font-bold text-slate-900 dark:text-slate-100 leading-relaxed">
         {{ currentQuestion.question }}
       </p>
 
@@ -44,6 +44,7 @@
           :key="idx"
           class="w-full rounded-xl border-2 p-4 text-left transition-all duration-200 flex items-start gap-3"
           :class="optionClass(idx)"
+          style="min-height: 52px;"
           @click="selectOption(idx)"
         >
           <span class="font-bold shrink-0 mt-0.5" :class="optionLabelColor(idx)">
@@ -56,9 +57,9 @@
       </div>
 
       <!-- 解析面板（选择后显示） -->
-      <div v-if="selectedOption !== null" class="bg-emerald-50 rounded-2xl p-4 space-y-1">
-        <p class="text-sm font-semibold text-emerald-600">解析</p>
-        <p class="text-sm text-slate-700 leading-relaxed">{{ currentQuestion.explanation }}</p>
+      <div v-if="selectedOption !== null" class="bg-emerald-50 dark:bg-emerald-900/20 rounded-2xl p-4 space-y-1">
+        <p class="text-sm font-semibold text-emerald-600 dark:text-emerald-400">解析</p>
+        <p class="text-sm text-slate-700 dark:text-slate-300 leading-relaxed">{{ currentQuestion.explanation }}</p>
       </div>
 
       <!-- 下一题按钮 -->
@@ -73,13 +74,22 @@
       <!-- 完成提示 -->
       <div
         v-if="selectedOption !== null && currentIndex >= totalQuestions - 1"
-        class="text-center py-4"
+        class="text-center py-4 space-y-4"
       >
-        <p class="text-lg font-bold text-slate-800">测验完成！</p>
-        <p class="text-sm text-slate-500 mt-1">得分：{{ score }} / {{ totalQuestions }}</p>
-        <p class="text-xs text-slate-400 mt-2">
-          {{ wrongCount > 0 ? `已将 ${wrongCount} 道错题加入闪卡复习池` : '全部正确！太棒了！' }}
-        </p>
+        <div class="py-4">
+          <p class="text-lg font-bold text-slate-800 dark:text-slate-200">测验完成！</p>
+          <p class="text-sm text-slate-500 mt-1">得分：{{ score }} / {{ totalQuestions }}</p>
+          <p class="text-xs text-slate-400 mt-2">
+            {{ wrongCount > 0 ? `已将 ${wrongCount} 道错题加入闪卡复习池` : '全部正确！太棒了！' }}
+          </p>
+        </div>
+        <button
+          class="w-full py-3.5 rounded-full bg-[#4F6EF7] text-white text-base font-semibold shadow-lg shadow-blue-500/25 active:scale-[0.98] transition-transform duration-150"
+          style="min-height: 48px;"
+          @click="restartQuiz"
+        >
+          再来一套
+        </button>
       </div>
       </template>
     </div>
@@ -203,30 +213,30 @@ watch(
 
 function optionClass(idx: number): string {
   if (selectedOption.value === null) {
-    return 'border-slate-200 bg-white hover:border-blue-300'
+    return 'border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 hover:border-blue-300'
   }
 
   if (idx === currentQuestion.value.correctIndex) {
-    return 'border-emerald-500 bg-emerald-50'
+    return 'border-emerald-500 bg-emerald-50 dark:bg-emerald-900/20'
   }
   if (idx === selectedOption.value && selectedOption.value !== currentQuestion.value.correctIndex) {
-    return 'border-red-400 bg-red-50'
+    return 'border-red-400 bg-red-50 dark:bg-red-900/20'
   }
-  return 'border-slate-200 bg-white opacity-60'
+  return 'border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 opacity-60'
 }
 
 function optionLabelColor(idx: number): string {
-  if (selectedOption.value === null) return 'text-slate-600'
-  if (idx === currentQuestion.value.correctIndex) return 'text-emerald-600'
-  if (idx === selectedOption.value && selectedOption.value !== currentQuestion.value.correctIndex) return 'text-red-500'
-  return 'text-slate-400'
+  if (selectedOption.value === null) return 'text-slate-600 dark:text-slate-400'
+  if (idx === currentQuestion.value.correctIndex) return 'text-emerald-600 dark:text-emerald-400'
+  if (idx === selectedOption.value && selectedOption.value !== currentQuestion.value.correctIndex) return 'text-red-500 dark:text-red-400'
+  return 'text-slate-400 dark:text-slate-500'
 }
 
 function optionTextColor(idx: number): string {
-  if (selectedOption.value === null) return 'text-slate-800'
-  if (idx === currentQuestion.value.correctIndex) return 'text-emerald-800'
-  if (idx === selectedOption.value && selectedOption.value !== currentQuestion.value.correctIndex) return 'text-red-700'
-  return 'text-slate-500'
+  if (selectedOption.value === null) return 'text-slate-800 dark:text-slate-200'
+  if (idx === currentQuestion.value.correctIndex) return 'text-emerald-800 dark:text-emerald-300'
+  if (idx === selectedOption.value && selectedOption.value !== currentQuestion.value.correctIndex) return 'text-red-700 dark:text-red-300'
+  return 'text-slate-500 dark:text-slate-400'
 }
 
 function selectOption(idx: number) {
@@ -242,6 +252,34 @@ function nextQuestion() {
     currentIndex.value++
     selectedOption.value = null
   }
+}
+
+/** 重新开始测验（再来一套） */
+function restartQuiz() {
+  // 重新加载题目（优先尝试 AI 出题，否则使用 mock）
+  questions.value = [...mockQuizQuestions]
+  currentIndex.value = 0
+  selectedOption.value = null
+  score.value = 0
+
+  // 如果 AI 可用，尝试重新生成
+  if (isAIReady.value) {
+    isGeneratingQuiz.value = true
+    generateQuiz('通用', undefined, 5)
+      .then(aiQuestions => {
+        if (aiQuestions && aiQuestions.length > 0) {
+          questions.value = aiQuestions.map((q, i) => ({
+            id: `quiz-ai-${i}`,
+            ...q,
+            topicId: 'topic-general',
+          }))
+        }
+      })
+      .catch(() => { /* 保持 mock 数据 */ })
+      .finally(() => { isGeneratingQuiz.value = false })
+  }
+
+  showToast?.('已重置测验，加油！', 'info')
 }
 
 // 组件挂载时尝试调用真实 API 出题

@@ -1,9 +1,9 @@
 <template>
-  <div class="min-h-screen bg-slate-50 pb-24">
+  <div class="min-h-screen bg-slate-50 dark:bg-slate-900 pb-24">
     <div class="max-w-md mx-auto px-5 pt-6 space-y-4">
       <!-- 顶部标题区 -->
       <div>
-        <h1 class="text-2xl font-bold text-slate-900">精选范例</h1>
+        <h1 class="text-2xl font-bold text-slate-900 dark:text-slate-100">精选范例</h1>
         <p class="text-sm text-slate-500 mt-0.5">高分讲解范例 · 一键学习</p>
       </div>
 
@@ -27,7 +27,7 @@
         <div
           v-for="example in filteredExamples"
           :key="example.id"
-          class="bg-white rounded-2xl shadow-sm p-4 cursor-pointer active:scale-[0.98] transition-transform duration-150"
+          class="bg-white dark:bg-slate-800 rounded-2xl shadow-sm p-4 cursor-pointer active:scale-[0.98] transition-transform duration-150"
         >
           <!-- 卡片头部：标题 + 一键学习按钮 -->
           <div class="flex items-start justify-between mb-3">
@@ -41,7 +41,7 @@
           </div>
 
           <!-- 主题名称 -->
-          <p class="text-sm text-slate-600 mb-3">{{ example.topic }}</p>
+          <p class="text-sm text-slate-600 dark:text-slate-400 mb-3">{{ example.topic }}</p>
 
           <!-- 标签行 -->
           <div class="flex items-center gap-2 mb-3 flex-wrap">
@@ -70,7 +70,7 @@
           </div>
 
           <!-- 底部：清晰度分数（圆形进度） -->
-          <div class="flex items-center justify-between pt-3 border-t border-slate-100">
+          <div class="flex items-center justify-between pt-3 border-t border-slate-100 dark:border-slate-700">
             <span class="text-xs text-slate-400">讲解清晰度</span>
             <div class="flex items-center gap-2">
               <!-- 圆形进度条 -->
@@ -120,11 +120,12 @@ const router = useRouter()
 
 // ==================== 筛选 tabs ====================
 
-/** 筛选选项 */
+/** 筛选选项（含热门排序） */
 const filterTabs = [
   { key: 'all', label: '全部' },
   { key: 'local', label: '本地高分' },
-  { key: 'ai', label: 'AI推荐' }
+  { key: 'ai', label: 'AI推荐' },
+  { key: 'hot', label: '热门' },
 ]
 
 /** 当前激活的筛选 */
@@ -253,6 +254,10 @@ const filteredExamples = computed<Example[]>(() => {
       return localExamples.value
     case 'ai':
       return aiExamples
+    case 'hot': {
+      // 热门：按清晰度降序排列所有范例
+      return [...allExamples.value].sort((a, b) => b.clarity - a.clarity)
+    }
     case 'all':
     default:
       return allExamples.value

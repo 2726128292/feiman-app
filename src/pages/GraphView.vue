@@ -1,9 +1,9 @@
 <template>
-  <div class="min-h-screen bg-slate-50 pb-24">
+  <div class="min-h-screen bg-slate-50 dark:bg-slate-900 pb-24">
     <div class="max-w-md mx-auto px-5 pt-6 space-y-5">
       <!-- 顶部标题 -->
       <div>
-        <h1 class="text-xl font-bold text-slate-900">知识图谱</h1>
+        <h1 class="text-xl font-bold text-slate-900 dark:text-slate-100">知识图谱</h1>
         <p class="text-sm text-slate-500 mt-0.5">查看主题之间的关联</p>
       </div>
 
@@ -16,7 +16,7 @@
           :class="
             selectedTopicId === topic.id
               ? 'bg-[#4F6EF7] text-white shadow-md'
-              : 'bg-white border border-slate-200 text-slate-600 hover:border-slate-300'
+              : 'bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:border-slate-300'
           "
           @click="selectedTopicId = topic.id"
         >
@@ -25,7 +25,7 @@
       </div>
 
       <!-- 图谱画布 -->
-      <div class="bg-white rounded-2xl shadow-sm p-4 relative overflow-hidden" style="min-height: 320px;">
+      <div class="bg-white dark:bg-slate-800 rounded-2xl shadow-sm p-4 relative overflow-hidden" style="min-height: 320px;">
         <!-- SVG 连接线层 -->
         <svg class="absolute inset-0 w-full h-full pointer-events-none" style="z-index: 0;">
           <defs>
@@ -81,9 +81,9 @@
       </div>
 
       <!-- 节点详情面板 -->
-      <div class="bg-white rounded-2xl p-5 shadow-sm">
-        <h3 class="text-sm font-semibold text-slate-700 mb-1">节点详情：{{ selectedNode?.label || 'Vue3' }}</h3>
-        <p class="text-sm text-slate-500 leading-relaxed mb-3">
+      <div class="bg-white dark:bg-slate-800 rounded-2xl p-5 shadow-sm">
+        <h3 class="text-sm font-semibold text-slate-700 dark:text-slate-300 mb-1">节点详情：{{ selectedNode?.label || 'Vue3' }}</h3>
+        <p class="text-sm text-slate-500 dark:text-slate-400 leading-relaxed mb-3">
           {{ selectedNode?.description || '掌握度 72%，关联 Vite 构建工具、组合式 API、PWA 离线缓存等核心概念。' }}
         </p>
         <div class="flex items-center gap-3">
