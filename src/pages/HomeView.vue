@@ -19,9 +19,14 @@
         <p class="text-sm text-white/90 leading-relaxed mb-3">
           你在「{{ dashboard.suggestionTopic }}」概念上重复卡顿，建议先完成 8 分钟类比讲解。
         </p>
-        <div class="bg-white/20 backdrop-blur-sm rounded-full px-4 py-2 inline-flex items-center gap-1.5 cursor-pointer active:scale-95 transition-transform" @click="router.push('/explain/new')">
-          <span class="w-1.5 h-1.5 rounded-full bg-white animate-pulse" />
-          <span class="text-xs font-medium text-white">查看详细分析</span>
+        <div class="flex items-center gap-2">
+          <div class="bg-white/20 backdrop-blur-sm rounded-full px-4 py-2 inline-flex items-center gap-1.5 cursor-pointer active:scale-95 transition-transform" @click="router.push('/explain/new')">
+            <span class="w-1.5 h-1.5 rounded-full bg-white animate-pulse" />
+            <span class="text-xs font-medium text-white">查看详细分析</span>
+          </div>
+          <div class="bg-white/20 backdrop-blur-sm rounded-full px-4 py-2 inline-flex items-center gap-1.5 cursor-pointer active:scale-95 transition-transform" @click="router.push('/ai')">
+            <span class="text-xs font-medium text-white">问 AI 助手</span>
+          </div>
         </div>
       </Card>
 
@@ -113,7 +118,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useRouter } from 'vue-router'
-import { BookOpen, Brain, Target, Route, Network, TrendingUp, Zap } from 'lucide-vue-next'
+import { BookOpen, Brain, Target, Route, Network, TrendingUp, Zap, Sparkles } from 'lucide-vue-next'
 import Card from '@/components/common/Card.vue'
 import { mockDashboardSummary, mockAnalytics } from '@/utils/mock'
 
@@ -175,6 +180,13 @@ const quickEntries = [
     subtitle: '查看报告',
     iconBg: '#06B6D4',
     route: '/analytics',
+  },
+  {
+    icon: Sparkles,
+    title: 'AI 助手',
+    subtitle: '自由对话 · 上传资料',
+    iconBg: '#06B6D4',
+    route: '/ai',
   },
 ]
 

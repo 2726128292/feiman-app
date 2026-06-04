@@ -126,6 +126,12 @@ const routes: RouteRecordRaw[] = [
     component: defineAsyncComponent(() => import('@/pages/AchievementsView.vue')),
     meta: { tab: 4, label: '我的' },
   },
+  // AI 助手（独立功能）
+  {
+    path: '/ai',
+    name: 'ai-assistant',
+    component: defineAsyncComponent(() => import('@/pages/AIAssistantView.vue')),
+  },
 ]
 
 const router = createRouter({
