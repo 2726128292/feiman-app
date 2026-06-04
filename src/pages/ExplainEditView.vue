@@ -94,7 +94,10 @@
 
 <script setup lang="ts">
 import { ref } from 'vue'
+import { useRouter } from 'vue-router'
 import { MessageCircleQuestion } from 'lucide-vue-next'
+
+const router = useRouter()
 
 const currentStep = ref(2)
 const totalSteps = ref(5)
@@ -118,7 +121,46 @@ function onEditorInput(e: Event) {
 }
 
 function handleTool(action: string) {
-  // 工具栏操作占位
-  console.log('Tool:', action)
+  const el = editorRef.value
+  if (!el) return
+
+  switch (action) {
+    case 'bold': {
+      document.execCommand('bold', false)
+      el.focus()
+      break
+    }
+    case 'italic': {
+      document.execCommand('italic', false)
+      el.focus()
+      break
+    }
+    case 'link': {
+      const url = prompt('请输入链接地址：', 'https://')
+      if (url) document.execCommand('createLink', false, url)
+      el.focus()
+      break
+    }
+    case 'image': {
+      alert('图片插入功能：在完整版中可从相册选择或粘贴图片URL')
+      break
+    }
+    case 'record': {
+      router.push('/explain/new/voice')
+      break
+    }
+    case 'ai': {
+      // AI 辅助：根据已有内容生成建议
+      if (!editorContent.value.trim()) {
+        alert('请先写一些内容，AI 将帮你优化表达')
+        return
+      }
+      // 在编辑器末尾追加 AI 建议
+      const suggestion = '\n\n💡 AI 建议：可以尝试用生活中的例子（如俄罗斯套娃、镜子反射）来类比解释，让听众更容易理解。'
+      el.innerText += suggestion
+      editorContent.value = el.innerText
+      break
+    }
+  }
 }
 </script>

@@ -149,6 +149,15 @@ const overallProgress = computed(() => {
 })
 
 function startLearning(chapterId: number) {
-  console.log('Start learning chapter:', chapterId)
+  // 根据章节类型跳转到对应的学习页面
+  const chapter = chapters.find(c => c.id === chapterId)
+  if (!chapter) return
+
+  // 更新章节进度
+  chapter.progress = Math.max(chapter.progress, 10)
+  if (chapter.progress === 10) {
+    // 跳转到费曼讲解页面开始学习
+    router.push('/explain/new')
+  }
 }
 </script>
