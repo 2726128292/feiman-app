@@ -90,8 +90,10 @@
           <button
             v-for="tool in toolbarTools"
             :key="tool.label"
-            class="px-3 py-1.5 rounded-lg text-xs font-medium bg-slate-100 text-slate-600 hover:bg-slate-200 active:scale-95 transition-all"
+            class="px-3 py-1.5 rounded-lg text-xs font-medium transition-all"
+            :class="(tool as any).disabled ? 'bg-slate-50 text-slate-300 cursor-not-allowed' : 'bg-slate-100 text-slate-600 hover:bg-slate-200 active:scale-95'"
             :title="tool.label"
+            :disabled="(tool as any).disabled"
             @click="handleTool(tool.action)"
           >{{ tool.icon }}</button>
         </div>
@@ -228,7 +230,7 @@
 import { ref, computed, onMounted, inject } from 'vue'
 import { useRouter } from 'vue-router'
 import { MessageCircleQuestion, Share2 } from 'lucide-vue-next'
-import { optimizeExplanation, isAIReady } from '@/composables/useDeepSeek'
+import { optimizeExplanation, isAIReady, isAIEnabled } from '@/composables/useDeepSeek'
 import { useShare } from '@/composables/useShare'
 
 const router = useRouter()
@@ -309,14 +311,23 @@ const scoreBarClass = computed(() => {
   return 'bg-red-400'
 })
 
-const toolbarTools = [
+const baseToolbarTools = [
   { icon: 'B', label: '加粗', action: 'bold' },
   { icon: 'I', label: '斜体', action: 'italic' },
   { icon: '链', label: '链接', action: 'link' },
   { icon: '图', label: '图片', action: 'image' },
   { icon: '录', label: '录音', action: 'record' },
-  { icon: 'AI', label: 'AI辅助', action: 'ai' },
 ]
+
+const toolbarTools = computed(() => [
+  ...baseToolbarTools,
+  {
+    icon: 'AI',
+    label: isAIEnabled ? 'AI辅助' : 'AI已关闭',
+    action: 'ai',
+    disabled: !isAIEnabled,
+  },
+])
 
 function onEditorInput(e: Event) {
   editorContent.value = (e.target as HTMLElement).innerText || ''
@@ -348,6 +359,10 @@ function handleTool(action: string) {
       router.push('/explain/new/voice')
       break
     case 'ai': {
+      if (!isAIEnabled) {
+        showToast('AI 功能已关闭，请在设置中开启', 'warning')
+        return
+      }
       if (!editorContent.value.trim()) {
         showToast('请先写一些内容，再使用AI辅助优化', 'warning')
         return

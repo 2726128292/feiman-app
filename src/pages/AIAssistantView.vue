@@ -8,8 +8,8 @@
         </div>
         <div class="flex-1 min-w-0">
           <h1 class="text-lg font-bold text-slate-900">AI 学习助手</h1>
-          <p class="text-xs mt-0.5" :class="isAIReady ? 'text-emerald-500' : 'text-slate-400'">
-            {{ isAIReady ? 'DeepSeek 已连接' : '未配置 API Key · 使用本地模式' }}
+          <p class="text-xs mt-0.5" :class="isAIReady ? 'text-emerald-500' : isAIEnabled ? 'text-slate-400' : 'text-red-400'">
+            {{ isAIReady ? 'DeepSeek 已连接' : isAIEnabled ? '未配置 API Key · 使用本地模式' : 'AI 已关闭 · 功能不可用' }}
           </p>
         </div>
         <!-- 上传 Skill 按钮 -->
@@ -128,25 +128,32 @@
 
       <!-- 输入区域 -->
       <div class="shrink-0 pt-3 border-t border-slate-100 bg-white/80 backdrop-blur -mx-5 px-5 pb-4">
+        <!-- AI 关闭提示 -->
+        <div v-if="!isAIEnabled" class="mb-3 px-3 py-2.5 rounded-xl bg-red-50 border border-red-100 flex items-center gap-2">
+          <Power :size="14" class="text-red-400 shrink-0" />
+          <p class="text-xs text-red-600">AI 功能已关闭。前往「设置」开启后可使用此功能。</p>
+        </div>
         <div class="flex items-end gap-2">
           <textarea
             v-model="inputText"
-            placeholder="输入问题..."
+            :placeholder="isAIEnabled ? '输入问题...' : 'AI 功能已关闭'"
             rows="1"
-            class="flex-1 resize-none rounded-xl border border-slate-200 px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 max-h-24"
+            class="flex-1 resize-none rounded-xl border px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 max-h-24"
+            :class="isAIEnabled ? 'border-slate-200 focus:ring-blue-500/20 focus:border-blue-400 bg-white' : 'border-slate-100 bg-slate-50 text-slate-400 cursor-not-allowed'"
+            :disabled="!isAIEnabled"
             @keydown.enter.exact.prevent="handleSend"
             @input="autoResize"
           />
           <button
             class="shrink-0 w-10 h-10 rounded-xl flex items-center justify-center transition-colors"
-            :class="inputText.trim() && !isWaiting ? 'bg-[#4F6EF7] text-white active:bg-blue-600' : 'bg-slate-100 text-slate-400'"
-            :disabled="!inputText.trim() || isWaiting"
+            :class="inputText.trim() && !isWaiting && isAIEnabled ? 'bg-[#4F6EF7] text-white active:bg-blue-600' : 'bg-slate-100 text-slate-400'"
+            :disabled="!inputText.trim() || isWaiting || !isAIEnabled"
             @click="handleSend"
           >
             <Send :size="18" />
           </button>
         </div>
-        <p v-if="!isAIReady" class="text-[11px] text-slate-400 mt-2 text-center">
+        <p v-if="!isAIReady && isAIEnabled" class="text-[11px] text-slate-400 mt-2 text-center">
           当前为本地模拟模式 · 前往「设置」配置 DeepSeek API Key 获得更强大的能力
         </p>
       </div>
@@ -156,9 +163,10 @@
 
 <script setup lang="ts">
 import { ref, nextTick, onMounted } from 'vue'
-import { Sparkles, Upload, FileText, Send } from 'lucide-vue-next'
+import { Sparkles, Upload, FileText, Send, Power } from 'lucide-vue-next'
 import {
   isAIReady,
+  isAIEnabled,
   isLoading,
   chat as aiChat,
 } from '@/composables/useDeepSeek'

@@ -170,23 +170,27 @@
         </div>
 
         <!-- AI 总开关 -->
-        <div class="flex items-center justify-between py-2 px-1 rounded-xl bg-slate-50">
+        <div class="flex items-center justify-between py-2 px-3 rounded-xl bg-slate-50">
           <div class="flex items-center gap-2">
             <Power :size="15" :class="isAIEnabled ? 'text-emerald-500' : 'text-slate-300'" />
             <span class="text-xs font-medium" :class="isAIEnabled ? 'text-slate-700' : 'text-slate-400'">
               {{ isAIEnabled ? 'AI 功能已开启' : 'AI 功能已关闭' }}
             </span>
           </div>
-          <div
-            class="w-10 h-5.5 rounded-full transition-colors shrink-0 relative cursor-pointer"
-            :class="isAIEnabled ? 'bg-emerald-500' : 'bg-slate-200'"
+          <button
+            class="shrink-0 relative cursor-pointer rounded-full transition-colors duration-200 focus:outline-none"
+            style="width: 44px; height: 24px;"
+            :style="{ backgroundColor: isAIEnabled ? '#10B981' : '#E2E8F0' }"
             @click="toggleAIEnabled()"
+            role="switch"
+            :aria-checked="isAIEnabled"
           >
-            <div
-              class="absolute top-0.5 w-4.5 h-4.5 rounded-full bg-white shadow-sm transition-all duration-200"
-              :class="isAIEnabled ? 'right-[2px]' : 'left-[2px]'"
+            <span
+              class="absolute top-[2px] rounded-full bg-white shadow-sm transition-all duration-200"
+              style="width: 20px; height: 20px;"
+              :style="{ left: isAIEnabled ? '22px' : '2px' }"
             />
-          </div>
+          </button>
         </div>
 
         <div v-if="!showKeyInput" class="flex items-center gap-2" :class="{ 'opacity-40 pointer-events-none': !isAIEnabled }">
