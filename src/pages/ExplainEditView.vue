@@ -90,10 +90,8 @@
           <button
             v-for="tool in toolbarTools"
             :key="tool.label"
-            class="px-3 py-1.5 rounded-lg text-xs font-medium transition-all"
-            :class="(tool as any).disabled ? 'bg-slate-50 text-slate-300 cursor-not-allowed' : 'bg-slate-100 text-slate-600 hover:bg-slate-200 active:scale-95'"
+            class="px-3 py-1.5 rounded-lg text-xs font-medium bg-slate-100 text-slate-600 hover:bg-slate-200 active:scale-95 transition-all"
             :title="tool.label"
-            :disabled="(tool as any).disabled"
             @click="handleTool(tool.action)"
           >{{ tool.icon }}</button>
         </div>
@@ -323,9 +321,8 @@ const toolbarTools = computed(() => [
   ...baseToolbarTools,
   {
     icon: 'AI',
-    label: isAIEnabled ? 'AI辅助' : 'AI已关闭',
+    label: isAIEnabled ? 'AI辅助' : '本地优化',
     action: 'ai',
-    disabled: !isAIEnabled,
   },
 ])
 
@@ -359,10 +356,6 @@ function handleTool(action: string) {
       router.push('/explain/new/voice')
       break
     case 'ai': {
-      if (!isAIEnabled) {
-        showToast('AI 功能已关闭，请在设置中开启', 'warning')
-        return
-      }
       if (!editorContent.value.trim()) {
         showToast('请先写一些内容，再使用AI辅助优化', 'warning')
         return

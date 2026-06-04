@@ -193,7 +193,7 @@
           </button>
         </div>
 
-        <div v-if="!showKeyInput" class="flex items-center gap-2" :class="{ 'opacity-40 pointer-events-none': !isAIEnabled }">
+        <div v-if="!showKeyInput" class="flex items-center gap-2">
           <div
             class="flex-1 px-3 py-2 rounded-xl text-xs font-mono truncate"
             :class="isAIReady ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-400'"
@@ -208,7 +208,7 @@
           </button>
         </div>
 
-        <div v-else class="space-y-2.5" :class="{ 'opacity-40 pointer-events-none': !isAIEnabled }">
+        <div v-else class="space-y-2.5">
           <input
             v-model="apiKeyInput"
             type="password"
