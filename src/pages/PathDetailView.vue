@@ -226,18 +226,73 @@
             </button>
           </div>
 
-          <!-- ====== 功能18：笔记入口 ====== -->
+          <!-- ====== 功能18：笔记系统 ====== -->
           <div class="px-4 pb-3 pt-0">
             <div class="mt-2 pt-2 border-t border-dashed border-slate-200">
+
+              <!-- 笔记展示区 -->
+              <div v-if="getChapterNoteObj(chapter.id) && editingNoteChapterId !== chapter.id" class="mt-2 px-0 pb-2">
+                <div class="rounded-xl bg-amber-50/80 dark:bg-amber-900/15 border border-amber-200/60 dark:border-amber-800/30 p-3 relative group/note">
+                  <!-- 操作按钮组（hover 显示） -->
+                  <div class="absolute top-2 right-2 flex gap-1 opacity-0 group-hover/note:opacity-100 transition-opacity">
+                    <button
+                      class="w-6 h-6 flex items-center justify-center rounded text-slate-400 hover:text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors"
+                      title="编辑笔记"
+                      @click.stop="startEditNote(chapter.id)"
+                    >
+                      <PencilIcon :size="12" />
+                    </button>
+                    <button
+                      class="w-6 h-6 flex items-center justify-center rounded text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
+                      title="删除笔记"
+                      @click.stop="confirmDeleteNote(chapter.id)"
+                    >
+                      <Trash2Icon :size="12" />
+                    </button>
+                  </div>
+
+                  <p class="text-[11px] text-amber-600 dark:text-amber-400 font-medium mb-1 pr-16">📝 学习笔记</p>
+                  <p class="text-xs text-slate-700 dark:text-slate-300 leading-relaxed whitespace-pre-wrap break-words">{{ getChapterNoteObj(chapter.id)?.content }}</p>
+                  <p class="text-[10px] text-slate-400 mt-1">{{ formatNoteTimeAgo(getChapterNoteObj(chapter.id)!.createdAt) }}</p>
+                </div>
+              </div>
+
+              <!-- 笔记编辑模式 -->
+              <div v-if="editingNoteChapterId === chapter.id" class="mt-2 px-0 pb-2">
+                <div class="rounded-xl bg-blue-50/80 dark:bg-blue-900/15 border border-blue-200/60 dark:border-blue-800/30 p-3 space-y-2">
+                  <div class="flex items-center justify-between">
+                    <p class="text-[11px] text-blue-600 dark:text-blue-400 font-medium">✏️ 编辑笔记</p>
+                    <button class="text-[10px] text-slate-400 hover:text-slate-600" @click="cancelEditNote">取消</button>
+                  </div>
+                  <textarea
+                    v-model="editNoteContent"
+                    rows="3"
+                    placeholder="记录你的学习心得..."
+                    class="w-full px-3 py-2 text-xs border border-blue-300 dark:border-blue-400 rounded-lg resize-none focus:outline-none focus:ring-1 focus:ring-blue-500/20 text-slate-800 dark:text-slate-200 bg-white dark:bg-slate-800"
+                  />
+                  <div class="flex justify-end">
+                    <button
+                      class="px-3 py-1.5 rounded-lg text-xs font-medium bg-blue-500 text-white"
+                      @click="saveEditedNote(chapter.id)"
+                    >
+                      保存修改
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              <!-- 笔记入口按钮 -->
               <button
                 class="w-full flex items-center gap-1.5 text-xs text-slate-400 hover:text-blue-500 py-1.5"
                 @click="toggleNoteEditor(chapter.id)"
               >
                 <StickyNote :size="13" />
-                {{ getChapterNote(chapter.id) ? '编辑笔记' : '添加笔记' }}
+                {{ getChapterNoteObj(chapter.id) && editingNoteChapterId !== chapter.id ? '编辑笔记' : '添加笔记' }}
               </button>
+
+              <!-- 原有笔记输入框（用于新建笔记） -->
               <textarea
-                v-if="showNoteEditor === chapter.id"
+                v-if="showNoteEditor === chapter.id && editingNoteChapterId !== chapter.id"
                 v-model="noteContents[chapter.id]"
                 placeholder="记录这个章节的学习心得、灵感..."
                 class="w-full mt-2 px-3 py-2 text-xs border border-slate-200 dark:border-slate-600 rounded-lg resize-none focus:outline-none focus:ring-1 focus:ring-blue-400 text-slate-800 dark:text-slate-200 bg-white dark:bg-slate-800 placeholder:text-slate-400 dark:placeholder:text-slate-500"
@@ -371,6 +426,48 @@
         </div>
       </Transition>
     </Teleport>
+
+    <!-- 删除笔记确认弹窗 -->
+    <Teleport to="body">
+      <Transition name="fade">
+        <div
+          v-if="showNoteDeleteConfirm"
+          class="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-6"
+          @click="showNoteDeleteConfirm = false"
+        >
+          <div
+            class="w-full max-w-sm bg-white dark:bg-slate-800 rounded-2xl p-5 space-y-4 animate-slide-up"
+            @click.stop
+          >
+            <div class="flex items-center gap-3">
+              <div class="w-10 h-10 rounded-full bg-red-50 flex items-center justify-center shrink-0">
+                <Trash2Icon :size="20" class="text-red-500" />
+              </div>
+              <div>
+                <h3 class="text-base font-semibold text-slate-800 dark:text-slate-100">确认删除</h3>
+                <p class="text-xs text-slate-400 mt-0.5">确定要删除这条笔记吗？</p>
+              </div>
+            </div>
+            <div class="flex gap-3">
+              <button
+                class="flex-1 py-2.5 rounded-xl text-sm font-medium bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 active:bg-slate-200 transition-colors"
+                style="min-height: 44px;"
+                @click="showNoteDeleteConfirm = false"
+              >
+                取消
+              </button>
+              <button
+                class="flex-1 py-2.5 rounded-xl text-sm font-medium bg-red-500 text-white active:bg-red-600 transition-colors shadow-lg shadow-red-500/25"
+                style="min-height: 44px;"
+                @click="executeDeleteNote"
+              >
+                确认删除
+              </button>
+            </div>
+          </div>
+        </div>
+      </Transition>
+    </Teleport>
   </div>
 </template>
 
@@ -384,6 +481,8 @@ import {
   Plus,
   X,
   Trash2,
+  Trash2 as Trash2Icon,
+  Pencil as PencilIcon,
   ChevronDown,
   ChevronUp,
   Layers,
@@ -409,6 +508,12 @@ const xpSystem = useXPSystem()
 const notesSystem = useNotes()
 const showNoteEditor = ref<string | null>(null)  // 当前展开笔记编辑器的章节ID
 const noteContents = ref<Record<string, string>>({})  // 各章节的笔记内容缓存
+
+// ====== 笔记编辑/删除功能 ======
+const editingNoteChapterId = ref<string | null>(null)
+const editNoteContent = ref('')
+const showNoteDeleteConfirm = ref(false)
+const deleteTargetNoteChapterId = ref<string | null>(null)
 
 // ====== 章节关联录音 ======
 interface VoiceRecording {
@@ -533,6 +638,77 @@ function saveChapterNote(chapterId: string): void {
     notesSystem.upsertNote(chapterId, content)
     showToast('笔记已保存', 'success')
   }
+}
+
+// ====== 笔记编辑/删除功能函数 ======
+
+/** 获取某章的笔记对象（返回完整 Note 对象，用于展示卡片） */
+function getChapterNoteObj(chapterId: string): import('@/composables/useNotes').Note | undefined {
+  return notesSystem.getTopicNotes(chapterId)[0]
+}
+
+/** 格式化笔记时间为相对时间 */
+function formatNoteTimeAgo(isoDate: string): string {
+  const diffMs = Date.now() - new Date(isoDate).getTime()
+  const diffMin = Math.floor(diffMs / 60000)
+  if (diffMin < 1) return '刚刚'
+  if (diffMin < 60) return `${diffMin}分钟前`
+  const diffHour = Math.floor(diffMs / 3600000)
+  if (diffHour < 24) return `${diffHour}小时前`
+  return new Date(isoDate).toLocaleDateString('zh-CN')
+}
+
+/** 开始编辑笔记 */
+function startEditNote(chapterId: string): void {
+  const note = getChapterNoteObj(chapterId)
+  if (note) {
+    editingNoteChapterId.value = chapterId
+    editNoteContent.value = note.content
+    showNoteEditor.value = null  // 关闭原有编辑器
+  }
+}
+
+/** 保存编辑后的笔记 */
+function saveEditedNote(chapterId: string): void {
+  if (!editNoteContent.value.trim()) {
+    showToast?.('笔记内容不能为空', 'warning')
+    return
+  }
+
+  notesSystem.upsertNote(chapterId, editNoteContent.value.trim())
+  // 同步更新缓存
+  noteContents.value[chapterId] = editNoteContent.value.trim()
+  showToast?.('笔记已更新', 'success')
+  cancelEditNote()
+}
+
+/** 取消编辑 */
+function cancelEditNote(): void {
+  editingNoteChapterId.value = null
+  editNoteContent.value = ''
+}
+
+/** 确认删除笔记 */
+function confirmDeleteNote(chapterId: string): void {
+  deleteTargetNoteChapterId.value = chapterId
+  showNoteDeleteConfirm.value = true
+}
+
+/** 执行删除笔记 */
+function executeDeleteNote(): void {
+  const chapterId = deleteTargetNoteChapterId.value
+  if (!chapterId) return
+
+  const note = getChapterNoteObj(chapterId)
+  if (note) {
+    notesSystem.deleteNote(note.id)
+    // 清除缓存
+    delete noteContents.value[chapterId]
+    showToast?.('笔记已删除', 'info')
+  }
+
+  showNoteDeleteConfirm.value = false
+  deleteTargetNoteChapterId.value = null
 }
 
 // ==================== 数据读取 ====================

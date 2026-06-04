@@ -140,8 +140,8 @@
         </div>
 
         <!-- 按主题分组选择 -->
-        <div class="bg-white rounded-2xl shadow-sm p-4">
-          <h3 class="text-sm font-semibold text-slate-700 mb-3">按主题选择</h3>
+        <div class="bg-white dark:bg-slate-800 rounded-2xl shadow-sm p-4">
+          <h3 class="text-sm font-semibold text-slate-700 dark:text-slate-200 mb-3">按主题选择</h3>
 
           <!-- 全选/取消 -->
           <button
@@ -152,39 +152,110 @@
             {{ allSelected ? '取消全选' : '全选所有' }}
           </button>
 
-          <!-- 主题列表 -->
+          <!-- 主题列表（可展开查看单张卡片） -->
           <div class="space-y-2">
-            <label
+            <div
               v-for="group in cardGroups"
               :key="group.topic"
-              class="flex items-center gap-3 p-3 rounded-xl cursor-pointer transition-colors"
-              :class="selectedTopics.has(group.topic) ? 'bg-blue-50' : 'hover:bg-slate-50'"
-              @click="toggleTopic(group.topic)"
+              class="rounded-xl overflow-hidden border transition-colors"
+              :class="selectedTopics.has(group.topic) ? 'border-blue-300 bg-blue-50/30' : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800/50'"
             >
-              <!-- 复选框 -->
+              <!-- 主题行：点击选中/取消 + 展开 -->
               <div
-                class="w-5 h-5 rounded-md flex items-center justify-center shrink-0 border-2 transition-colors"
-                :class="selectedTopics.has(group.topic) ? 'bg-[#4F6EF7] border-[#4F6EF7]' : 'border-slate-300'"
+                class="flex items-center gap-3 p-3 cursor-pointer"
+                @click="toggleTopic(group.topic)"
               >
-                <Check v-if="selectedTopics.has(group.topic)" :size="12" class="text-white" />
+                <!-- 复选框 -->
+                <div
+                  class="w-5 h-5 rounded-md flex items-center justify-center shrink-0 border-2 transition-colors"
+                  :class="selectedTopics.has(group.topic) ? 'bg-[#4F6EF7] border-[#4F6EF7]' : 'border-slate-300'"
+                  @click.stop="toggleTopic(group.topic)"
+                >
+                  <Check v-if="selectedTopics.has(group.topic)" :size="12" class="text-white" />
+                </div>
+
+                <!-- 主题信息 -->
+                <div class="flex-1 min-w-0">
+                  <div class="flex items-center gap-2">
+                    <p class="text-sm font-medium text-slate-800 dark:text-slate-100">{{ group.topic }}</p>
+                    <span class="text-[10px] text-slate-400">{{ group.cards.length }} 张</span>
+                  </div>
+                </div>
+
+                <!-- 展开/折叠箭头 -->
+                <button
+                  class="w-6 h-6 flex items-center justify-center rounded shrink-0 text-slate-400 hover:text-slate-600 transition-colors"
+                  @click.stop="toggleExpandTopic(group.topic)"
+                >
+                  <ChevronDown :size="14" :class="{ 'rotate-180': expandedTopics.has(group.topic) }" class="transition-transform" />
+                </button>
               </div>
 
-              <!-- 主题信息 -->
-              <div class="flex-1 min-w-0">
-                <p class="text-sm font-medium text-slate-800">{{ group.topic }}</p>
-                <p class="text-xs text-slate-400 mt-0.5">{{ group.cards.length }} 张卡片</p>
-              </div>
+              <!-- 展开的卡片列表 -->
+              <Transition name="card-expand">
+                <div v-if="expandedTopics.has(group.topic)" class="px-3 pb-3 space-y-1.5 border-t border-slate-100 dark:border-slate-700 pt-2">
+                  <div
+                    v-for="card in group.cards"
+                    :key="card.id"
+                    class="group/card flex items-start gap-2 px-2.5 py-2 rounded-lg bg-white dark:bg-slate-700/60 border border-slate-100 dark:border-slate-600"
+                  >
+                    <!-- 编辑模式 -->
+                    <template v-if="editingCardId === card.id">
+                      <div class="flex-1 space-y-1.5 min-w-0">
+                        <input
+                          :value="editCardForm.question"
+                          placeholder="问题"
+                          class="w-full px-2 py-1.5 text-xs border border-blue-300 dark:border-blue-400 rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-500/20 text-slate-800 dark:text-slate-200 bg-white dark:bg-slate-800"
+                          @input="editCardForm.question = ($event.target as HTMLInputElement).value"
+                        />
+                        <textarea
+                          :value="editCardForm.answer"
+                          placeholder="答案"
+                          rows="2"
+                          class="w-full px-2 py-1.5 text-xs border border-blue-300 dark:border-blue-400 rounded-lg resize-none focus:outline-none focus:ring-1 focus:ring-blue-500/20 text-slate-800 dark:text-slate-200 bg-white dark:bg-slate-800"
+                          @input="editCardForm.answer = ($event.target as HTMLTextAreaElement).value"
+                        />
+                        <div class="flex gap-1.5">
+                          <button
+                            class="px-2 py-1 rounded-md text-[10px] font-medium bg-emerald-500 text-white"
+                            @click.stop="saveEditCard(card.id)"
+                          >保存</button>
+                          <button
+                            class="px-2 py-1 rounded-md text-[10px] font-medium bg-slate-200 text-slate-600"
+                            @click.stop="cancelEditCard"
+                          >取消</button>
+                        </div>
+                      </div>
+                    </template>
 
-              <!-- 预览标签 -->
-              <div class="flex flex-wrap gap-1 max-w-[120px]">
-                <span
-                  v-for="(card, i) in group.cards.slice(0, 2)"
-                  :key="i"
-                  class="text-[10px] px-1.5 py-0.5 rounded bg-slate-100 text-slate-500 truncate max-w-[55px]"
-                >{{ card.question }}</span>
-                <span v-if="group.cards.length > 2" class="text-[10px] text-slate-300">+{{ group.cards.length - 2 }}</span>
-              </div>
-            </label>
+                    <!-- 显示模式 -->
+                    <template v-else>
+                      <div class="flex-1 min-w-0">
+                        <p class="text-xs font-medium text-slate-700 dark:text-slate-300 truncate">{{ card.question }}</p>
+                        <p class="text-[10px] text-slate-400 truncate mt-0.5">{{ card.answer?.slice(0, 40) || '(无答案)' }}</p>
+                      </div>
+                      <!-- 操作按钮 -->
+                      <div class="shrink-0 flex items-center gap-0.5 opacity-0 group-hover/card:opacity-100 group-hover/card:opacity-100 transition-opacity">
+                        <button
+                          class="w-6 h-6 flex items-center justify-center rounded text-slate-400 hover:text-blue-500 hover:bg-blue-50 transition-colors"
+                          title="编辑"
+                          @click.stop="startEditCard(card)"
+                        >
+                          <Pencil :size="12" />
+                        </button>
+                        <button
+                          class="w-6 h-6 flex items-center justify-center rounded text-slate-400 hover:text-red-500 hover:bg-red-50 transition-colors"
+                          title="删除"
+                          @click.stop="confirmDeleteCard(card.id)"
+                        >
+                          <Trash2 :size="12" />
+                        </button>
+                      </div>
+                    </template>
+                  </div>
+                </div>
+              </Transition>
+            </div>
           </div>
         </div>
 
@@ -291,6 +362,48 @@
       </div>
 
     </div>
+
+    <!-- 删除卡片确认弹窗 -->
+    <Teleport to="body">
+      <Transition name="fade">
+        <div
+          v-if="showCardDeleteConfirm"
+          class="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-6"
+          @click="showCardDeleteConfirm = false"
+        >
+          <div
+            class="w-full max-w-sm bg-white dark:bg-slate-800 rounded-2xl p-5 space-y-4 animate-slide-up"
+            @click.stop
+          >
+            <div class="flex items-center gap-3">
+              <div class="w-10 h-10 rounded-full bg-red-50 flex items-center justify-center shrink-0">
+                <Trash2 :size="20" class="text-red-500" />
+              </div>
+              <div>
+                <h3 class="text-base font-semibold text-slate-800 dark:text-slate-100">确认删除</h3>
+                <p class="text-xs text-slate-400 mt-0.5">确定要删除这张闪卡吗？此操作不可撤销。</p>
+              </div>
+            </div>
+            <div class="flex gap-3">
+              <button
+                class="flex-1 py-2.5 rounded-xl text-sm font-medium bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 active:bg-slate-200 transition-colors"
+                style="min-height: 44px;"
+                @click="showCardDeleteConfirm = false"
+              >
+                取消
+              </button>
+              <button
+                class="flex-1 py-2.5 rounded-xl text-sm font-medium bg-red-500 text-white active:bg-red-600 transition-colors shadow-lg shadow-red-500/25"
+                style="min-height: 44px;"
+                @click="executeDeleteCard"
+              >
+                确认删除
+              </button>
+            </div>
+          </div>
+        </div>
+      </Transition>
+    </Teleport>
   </div>
 </template>
 
@@ -299,7 +412,7 @@ import { ref, computed, reactive, onMounted, inject, onUnmounted } from 'vue'
 import { mockCards } from '@/utils/mock'
 import { updateSM2, type SM2Params } from '@/composables/useSpacedRepetition'
 import type { ReviewCard } from '@/types/card'
-import { Check, Upload, ChevronLeft, ChevronRight, Plus } from 'lucide-vue-next'
+import { Check, Upload, ChevronLeft, ChevronRight, Plus, Pencil, Trash2 } from 'lucide-vue-next'
 import { usePullRefresh } from '@/composables/usePullRefresh'
 import { useUndoRedo } from '@/composables/useUndoRedo'
 import { triggerHaptic } from '@/composables/useHaptic'
@@ -333,6 +446,18 @@ const createForm = reactive({
   answer: '',
   topic: '前端工程化',
 })
+
+// ====== 卡片编辑/删除 ======
+const editingCardId = ref<string | null>(null)
+const editCardForm = reactive({
+  question: '',
+  answer: '',
+})
+/** 展开查看详情的主题 */
+const expandedTopics = ref<Set<string>>(new Set())
+// 删除确认
+const showCardDeleteConfirm = ref(false)
+const deleteTargetCardId = ref<string | null>(null)
 
 /**
  * A2：新建闪卡保存逻辑
@@ -525,6 +650,99 @@ function toggleAll() {
 }
 
 const allSelected = computed(() => selectedTopics.size === cardGroups.value.length)
+
+// ====== 卡片编辑/删除操作 ======
+
+/** 切换主题展开状态 */
+function toggleExpandTopic(topic: string): void {
+  if (expandedTopics.value.has(topic)) {
+    expandedTopics.value.delete(topic)
+  } else {
+    expandedTopics.value.add(topic)
+  }
+  expandedTopics.value = new Set(expandedTopics.value)
+}
+
+/** 开始编辑卡片 */
+function startEditCard(card: ReviewCard): void {
+  editingCardId.value = card.id
+  editCardForm.question = card.question
+  editCardForm.answer = card.answer || ''
+}
+
+/** 保存编辑的卡片 */
+function saveEditCard(cardId: string): void {
+  if (!editCardForm.question.trim()) {
+    showToast('问题不能为空', 'warning')
+    return
+  }
+
+  // 在 allCards 中更新
+  const card = allCards.value.find(c => c.id === cardId)
+  if (card) {
+    card.question = editCardForm.question.trim()
+    card.answer = editCardForm.answer.trim() || '待补充答案'
+
+    // 同步到 localStorage
+    try {
+      const raw = localStorage.getItem('feiman_review_cards') || localStorage.getItem('feiman_cards') || '[]'
+      const stored = JSON.parse(raw)
+      const idx = stored.findIndex((c: any) => c.id === cardId)
+      if (idx !== -1) {
+        stored[idx] = { ...stored[idx], question: card.question, answer: card.answer }
+        localStorage.setItem('feiman_review_cards', JSON.stringify(stored))
+      }
+    } catch { /* ignore */ }
+
+    showToast('闪卡已更新', 'success')
+  }
+  cancelEditCard()
+}
+
+/** 取消编辑 */
+function cancelEditCard(): void {
+  editingCardId.value = null
+  editCardForm.question = ''
+  editCardForm.answer = ''
+}
+
+/** 确认删除卡片 */
+function confirmDeleteCard(cardId: string): void {
+  deleteTargetCardId.value = cardId
+  showCardDeleteConfirm.value = true
+}
+
+/** 执行删除卡片 */
+function executeDeleteCard(): void {
+  const cardId = deleteTargetCardId.value
+  if (!cardId) return
+
+  // 从 allCards 移除
+  const idx = allCards.value.findIndex(c => c.id === cardId)
+  if (idx !== -1) {
+    const removed = allCards.value.splice(idx, 1)[0]
+
+    // 同步到 localStorage
+    try {
+      const raw = localStorage.getItem('feiman_review_cards') || localStorage.getItem('feiman_cards') || '[]'
+      const stored = JSON.parse(raw)
+      const filtered = stored.filter((c: any) => c.id !== cardId)
+      localStorage.setItem('feiman_review_cards', JSON.stringify(filtered))
+
+      // 同时从错题本中移除
+      const wrongRaw = localStorage.getItem('feiman_wrong_book')
+      if (wrongRaw) {
+        const wrong = JSON.parse(wrongRaw)
+        localStorage.setItem('feiman_wrong_book', JSON.stringify(wrong.filter((e: any) => e.cardId !== cardId)))
+      }
+    } catch { /* ignore */ }
+
+    showToast(`已删除「${removed.question}」`, 'info')
+  }
+
+  showCardDeleteConfirm.value = false
+  deleteTargetCardId.value = null
+}
 
 const selectedCount = computed(() => {
   let count = 0
@@ -795,5 +1013,38 @@ onUnmounted(() => {
 }
 .animate-flip {
   animation: flip 0.3s ease-in-out;
+}
+
+/* 卡片展开动画 */
+.card-expand-enter-active,
+.card-expand-leave-active {
+  transition: all 0.2s ease;
+  overflow: hidden;
+}
+.card-expand-enter-from,
+.card-expand-leave-to {
+  opacity: 0;
+  max-height: 0;
+  padding-top: 0;
+  padding-bottom: 0;
+}
+
+/* slide-up 动画 */
+@keyframes slide-up {
+  from { opacity: 0; transform: translateY(12px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.animate-slide-up {
+  animation: slide-up 0.2s ease-out;
+}
+
+/* fade 动画 */
+.fade-enter-active,
+.fade-leave-active {
+  transition: opacity 0.15s ease;
+}
+.fade-enter-from,
+.fade-leave-to {
+  opacity: 0;
 }
 </style>
