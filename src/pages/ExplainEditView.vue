@@ -1,6 +1,7 @@
 <template>
   <div class="min-h-screen bg-slate-50 pb-24">
     <div class="max-w-md mx-auto px-5 pt-6 space-y-5">
+
       <!-- 顶部标题 -->
       <div>
         <h1 class="text-xl font-bold text-slate-900">费曼讲解</h1>
@@ -10,7 +11,6 @@
       <!-- 步骤指示器 -->
       <div class="flex items-center gap-0">
         <template v-for="(stepLabel, idx) in stepLabels" :key="idx">
-          <!-- 圆圈 -->
           <div class="flex flex-col items-center">
             <div
               class="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold shrink-0 transition-colors"
@@ -21,17 +21,12 @@
                     ? 'bg-[#4F6EF7] text-white ring-4 ring-blue-100'
                     : 'bg-slate-200 text-slate-400'
               "
-            >
-              {{ idx + 1 }}
-            </div>
+            >{{ idx + 1 }}</div>
             <span
               class="text-[10px] mt-1 whitespace-nowrap"
               :class="idx + 1 <= currentStep ? 'text-[#4F6EF7] font-medium' : 'text-slate-400'"
-            >
-              {{ stepLabel }}
-            </span>
+            >{{ stepLabel }}</span>
           </div>
-          <!-- 连接线 -->
           <div
             v-if="idx < stepLabels.length - 1"
             class="flex-1 h-0.5 mx-1 mt-[-12px]"
@@ -44,9 +39,7 @@
       <div class="bg-white rounded-2xl p-5 shadow-sm">
         <div class="flex items-center gap-2 mb-3">
           <span class="text-xs font-semibold text-slate-500">当前任务</span>
-          <span class="px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-blue-50 text-blue-600">
-            限时 8 分钟
-          </span>
+          <span class="px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-blue-50 text-blue-600">限时 8 分钟</span>
         </div>
         <p class="text-lg font-bold text-slate-900 leading-relaxed">
           请用生活类比解释：什么是递归？
@@ -72,71 +65,190 @@
             class="px-3 py-1.5 rounded-lg text-xs font-medium bg-slate-100 text-slate-600 hover:bg-slate-200 active:scale-95 transition-all"
             :title="tool.label"
             @click="handleTool(tool.action)"
-          >
-            {{ tool.icon }}
-          </button>
+          >{{ tool.icon }}</button>
         </div>
       </div>
 
-      <!-- AI 追问面板 -->
-      <div v-if="aiResult?.followUpQuestions?.length" class="bg-yellow-50 rounded-2xl p-5">
-        <div class="flex items-center gap-2 mb-3">
-          <MessageCircleQuestion :size="16" class="text-orange-500" />
-          <span class="text-sm font-semibold text-orange-700">AI 追问</span>
+      <!-- ====== 评分结果面板 (在当前页面展示，不跳转) ====== -->
+      <div v-if="scoreResult" class="space-y-4 animate-fade-up">
+
+        <!-- 综合评分卡片 -->
+        <div class="bg-white rounded-2xl p-5 shadow-sm">
+          <div class="flex items-center justify-between mb-4">
+            <span class="text-sm font-semibold text-slate-700">讲解评分</span>
+            <span class="text-xs px-2 py-0.5 rounded-full" :class="scoreColorClass">{{ scoreLabel }}</span>
+          </div>
+          <div class="flex items-end gap-3">
+            <span class="text-5xl font-black" :class="scoreTextColor">{{ scoreResult.score }}</span>
+            <span class="text-lg text-slate-400 mb-1">/ 100</span>
+          </div>
+          <!-- 分数条 -->
+          <div class="w-full h-2 bg-slate-100 rounded-full mt-4 overflow-hidden">
+            <div
+              class="h-full rounded-full transition-all duration-700"
+              :class="scoreBarClass"
+              :style="{ width: scoreResult.score + '%' }"
+            />
+          </div>
         </div>
-        <ul class="space-y-2">
-          <li
-            v-for="(q, idx) in aiResult.followUpQuestions"
-            :key="idx"
-            class="text-sm text-slate-700 leading-relaxed pl-4 -indent-4"
-          >
-            {{ q }}
-          </li>
-        </ul>
+
+        <!-- 维度评分 -->
+        <div class="bg-white rounded-2xl p-5 shadow-sm">
+          <h3 class="text-sm font-semibold text-slate-700 mb-3">各维度得分</h3>
+          <div class="space-y-3">
+            <div v-for="dim in scoreResult.dimensions" :key="dim.name">
+              <div class="flex items-center justify-between mb-1">
+                <span class="text-xs text-slate-600">{{ dim.name }}</span>
+                <span class="text-xs font-bold" :class="dim.score >= 80 ? 'text-emerald-600' : dim.score >= 60 ? 'text-orange-500' : 'text-red-500'">{{ dim.score }}分</span>
+              </div>
+              <div class="w-full h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                <div
+                  class="h-full rounded-full transition-all duration-700"
+                  :class="dim.score >= 80 ? 'bg-emerald-400' : dim.score >= 60 ? 'bg-orange-400' : 'bg-red-400'"
+                  :style="{ width: dim.score + '%' }"
+                />
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 知识缺口 -->
+        <div v-if="scoreResult.gaps.length > 0" class="bg-white rounded-2xl p-5 shadow-sm">
+          <h3 class="text-sm font-semibold text-slate-700 mb-3">发现的知识缺口</h3>
+          <div class="space-y-2">
+            <div
+              v-for="(gap, i) in scoreResult.gaps"
+              :key="i"
+              class="flex items-start gap-2 p-2.5 rounded-xl"
+              :class="gap.priority === 'high' ? 'bg-red-50' : gap.priority === 'medium' ? 'bg-orange-50' : 'bg-blue-50'"
+            >
+              <span
+                class="w-2 h-2 rounded-full shrink-0 mt-1.5"
+                :class="gap.priority === 'high' ? 'bg-red-500' : gap.priority === 'medium' ? 'bg-orange-400' : 'bg-blue-400'"
+              />
+              <div class="flex-1 min-w-0">
+                <p class="text-sm text-slate-700">{{ gap.text }}</p>
+                <p class="text-[11px] mt-0.5" :class="gap.priority === 'high' ? 'text-red-400' : gap.priority === 'medium' ? 'text-orange-400' : 'text-blue-400'">
+                  {{ gap.priority === 'high' ? '高优先级' : gap.priority === 'medium' ? '中优先级' : '建议补充' }}
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 总体反馈 -->
+        <div v-if="scoreResult.feedback" class="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-2xl p-5">
+          <h3 class="text-sm font-semibold text-[#4F6EF7] mb-2">总体反馈</h3>
+          <p class="text-sm text-slate-700 leading-relaxed">{{ scoreResult.feedback }}</p>
+        </div>
+
+        <!-- 追问建议 -->
+        <div v-if="scoreResult.followUpQuestions.length > 0" class="bg-yellow-50 rounded-2xl p-5">
+          <div class="flex items-center gap-2 mb-3">
+            <MessageCircleQuestion :size="16" class="text-orange-500" />
+            <span class="text-sm font-semibold text-orange-700">追问建议</span>
+          </div>
+          <ul class="space-y-2">
+            <li
+              v-for="(q, idx) in scoreResult.followUpQuestions"
+              :key="idx"
+              class="text-sm text-slate-700 leading-relaxed pl-4 -indent-4"
+            >{{ q }}</li>
+          </ul>
+        </div>
+
+        <!-- 操作按钮 -->
+        <div class="flex gap-3">
+          <button
+            class="flex-1 py-3 rounded-full border-2 border-slate-200 text-slate-600 text-sm font-medium active:bg-slate-50 transition-colors"
+            @click="continueEditing"
+          >继续修改讲解</button>
+          <button
+            class="flex-1 py-3 rounded-full bg-[#4F6EF7] text-white text-sm font-semibold shadow-md shadow-blue-500/20 active:scale-[0.98] transition-transform"
+            @click="saveSession"
+          >保存本次讲解</button>
+        </div>
       </div>
 
-      <!-- 提交讲解按钮 -->
+      <!-- 提交讲解按钮 (未评分时显示) -->
       <button
+        v-if="!scoreResult"
         class="w-full py-3.5 rounded-full bg-[#4F6EF7] text-white text-base font-semibold shadow-lg shadow-blue-500/25 active:scale-[0.98] transition-transform duration-150 flex items-center justify-center gap-2 disabled:opacity-50 disabled:active:scale-100"
         :disabled="isScoring || !editorContent.trim()"
         @click="handleSubmitScore"
       >
-        <svg v-if="isScoring || isLoading" class="animate-spin h-5 w-5" viewBox="0 0 24 24" fill="none">
+        <svg v-if="isScoring" class="animate-spin h-5 w-5" viewBox="0 0 24 24" fill="none">
           <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="3" opacity="0.25"/>
           <path d="M4 12a8 8 0 018-8" stroke="currentColor" stroke-width="3" stroke-linecap="round"/>
         </svg>
-        {{ isScoring ? '评分中...' : '提交讲解并评分' }}
+        {{ isScoring ? '正在分析...' : '提交讲解并评分' }}
       </button>
+
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
-import { useRouter, useRoute } from 'vue-router'
+import { ref, computed } from 'vue'
+import { useRouter } from 'vue-router'
 import { MessageCircleQuestion } from 'lucide-vue-next'
-import { scoreExplanation, optimizeExplanation, isAIReady, isLoading } from '@/composables/useDeepSeek'
+import { optimizeExplanation, isAIReady } from '@/composables/useDeepSeek'
 
 const router = useRouter()
-const route = useRoute()
 
 const currentStep = ref(2)
 const totalSteps = ref(5)
-
 const stepLabels = ['选题', '讲解', '录音', '诊断', '复习']
 
 const editorRef = ref<HTMLDivElement>()
 const editorContent = ref('')
 
-// AI 相关状态
-const aiResult = ref<{
-  score: number
-  clarity: number
-  gaps: string[]
-  followUpQuestions: string[]
-  feedback: string
-} | null>(null)
+// 评分结果
 const isScoring = ref(false)
+const scoreResult = ref<{
+  score: number
+  dimensions: Array<{ name: string; score: number }>
+  gaps: Array<{ text: string; priority: 'high' | 'medium' | 'low' }>
+  feedback: string
+  followUpQuestions: string[]
+} | null>(null)
+
+// 分数颜色计算
+const scoreLabel = computed(() => {
+  if (!scoreResult.value) return ''
+  const s = scoreResult.value.score
+  if (s >= 90) return '优秀'
+  if (s >= 75) return '良好'
+  if (s >= 60) return '及格'
+  return '需努力'
+})
+
+const scoreColorClass = computed(() => {
+  if (!scoreResult.value) return ''
+  const s = scoreResult.value.score
+  if (s >= 90) return 'bg-emerald-100 text-emerald-700'
+  if (s >= 75) return 'bg-blue-100 text-blue-700'
+  if (s >= 60) return 'bg-orange-100 text-orange-700'
+  return 'bg-red-100 text-red-700'
+})
+
+const scoreTextColor = computed(() => {
+  if (!scoreResult.value) return 'text-slate-900'
+  const s = scoreResult.value.score
+  if (s >= 90) return 'text-emerald-500'
+  if (s >= 75) return 'text-[#4F6EF7]'
+  if (s >= 60) return 'text-orange-500'
+  return 'text-red-500'
+})
+
+const scoreBarClass = computed(() => {
+  if (!scoreResult.value) return 'bg-slate-300'
+  const s = scoreResult.value.score
+  if (s >= 90) return 'bg-emerald-400'
+  if (s >= 75) return 'bg-[#4F6EF7]'
+  if (s >= 60) return 'bg-orange-400'
+  return 'bg-red-400'
+})
 
 const toolbarTools = [
   { icon: 'B', label: '加粗', action: 'bold' },
@@ -156,59 +268,163 @@ function handleTool(action: string) {
   if (!el) return
 
   switch (action) {
-    case 'bold': {
+    case 'bold':
       document.execCommand('bold', false)
       el.focus()
       break
-    }
-    case 'italic': {
+    case 'italic':
       document.execCommand('italic', false)
       el.focus()
       break
-    }
     case 'link': {
       const url = prompt('请输入链接地址：', 'https://')
       if (url) document.execCommand('createLink', false, url)
       el.focus()
       break
     }
-    case 'image': {
-      alert('图片插入功能：在完整版中可从相册选择或粘贴图片URL')
+    case 'image':
+      alert('图片插入功能：可粘贴图片URL或使用剪贴板')
       break
-    }
-    case 'record': {
+    case 'record':
       router.push('/explain/new/voice')
       break
-    }
     case 'ai': {
-      // AI 辅助：根据已有内容生成建议
       if (!editorContent.value.trim()) {
-        alert('请先写一些内容，AI 将帮你优化表达')
+        alert('请先写一些内容，再使用AI辅助优化')
         return
       }
       if (isAIReady.value) {
-        // 调用真实 API 优化内容
         optimizeExplanation(editorContent.value).then((result) => {
-          const el = editorRef.value
           if (el) {
             editorContent.value = result.optimized
             el.innerText = result.optimized
           }
-          alert('✅ ' + result.suggestion)
-        }).catch((err) => {
-          alert('AI 优化失败：' + (err instanceof Error ? err.message : '未知错误'))
+          // 清除之前的评分结果，让用户重新提交
+          scoreResult.value = null
+        }).catch(() => {
+          alert('AI 优化失败，请稍后重试')
         })
       } else {
-        // 降级：追加静态建议
-        const suggestion = '\n\n💡 AI 建议：可以尝试用生活中的例子（如俄罗斯套娃、镜子反射）来类比解释，让听众更容易理解。'
-        const el = editorRef.value
-        if (el) {
-          el.innerText += suggestion
-          editorContent.value = el.innerText
-        }
+        const suggestion = '\n\n💡 建议：尝试用生活中的例子来类比解释，比如俄罗斯套娃、镜子反射等。'
+        el.innerText += suggestion
+        editorContent.value = el.innerText
       }
       break
     }
+  }
+}
+
+/**
+ * 本地评分引擎 - 不依赖任何外部 API
+ * 从内容特征分析质量
+ */
+function localScore(content: string): typeof scoreResult.value {
+  const len = content.length
+
+  // ====== 维度一：内容完整性 (25分) ======
+  let completenessScore = 0
+  const hasIntro = /^.{10,}/.test(content) // 开头有足够内容
+  const hasBody = len >= 80 // 有足够正文
+  const hasConclusion = /总结|总之|所以|因此|综上/.test(content)
+  if (hasIntro && hasBody && hasConclusion) completenessScore = 25
+  else if (hasIntro && hasBody) completenessScore = 20
+  else if (hasBody) completenessScore = 15
+  else completenessScore = Math.min(10, Math.floor(len / 10))
+
+  // ====== 维度二：类比运用 (25分) ======
+  let analogyScore = 0
+  const analogyPatterns = [
+    /像.{1,8}(一样|一般|那样|似的)/,
+    /好比|仿佛|如同|类似于|可以想象/,
+    /例如|比方说|打个比方|举个例子/,
+    /套娃|镜子|叠盒子|洋葱|剥皮|搭积木|盖房子|做饭|开车|购物|排队|找东西/,
+    /生活|日常|现实|实际/,
+  ]
+  const analogyCount = analogyPatterns.filter(p => p.test(content)).length
+  if (analogyCount >= 3) analogyScore = 25
+  else if (analogyCount >= 2) analogyScore = 20
+  else if (analogyCount >= 1) analogyScore = 14
+  else analogyScore = 8
+
+  // ====== 维度三：表达清晰度 (25分) ======
+  let clarityScore = 15 // 基础分
+  const avgSentenceLen = len / Math.max(1, content.split(/[。！？\n]/).length)
+  if (avgSentenceLen <= 30) clarityScore += 4   // 句子不长
+  if (avgSentenceLen <= 50) clarityScore += 3
+  if (/[，、]/.test(content)) clarityScore += 3  // 有标点分段
+  if (!/[\u4e00-\u9fff]{15,}[\u4e00-\u9fff]{15,}[\u4e00-\u9fff]{15,}/.test(content)) clarityScore += 2 // 没有超长无断句
+  clarityScore = Math.min(25, clarityScore)
+
+  // ====== 维度四：深度洞察 (25分) ======
+  let depthScore = 10 // 基础分
+  const depthPatterns = [
+    /但是|不过|然而|反之|另一方面/, // 转折/对比
+    /原因|因为|由于|导致|结果是/,     // 因果关系
+    /本质|核心|关键|底层|原理|机制/,    // 深层概念
+    /边界|例外|特殊情况|注意|小心/,     // 边界意识
+    /区别|不同|差异|对比/,             // 对比分析
+  ]
+  const depthCount = depthPatterns.filter(p => p.test(content)).length
+  depthScore += Math.min(12, depthCount * 3)
+  if (len >= 200) depthScore += 3 // 足够长说明有展开
+  depthScore = Math.min(25, depthScore)
+
+  // ====== 总分 ======
+  const totalScore = completenessScore + analogyScore + clarityScore + depthScore
+
+  // ====== 知识缺口检测 ======
+  const gaps: typeof scoreResult.value.gaps = []
+  if (!/终止|停止|结束|base case|出口/.test(content)) {
+    gaps.push({ text: '缺少对「终止条件」的强调', priority: 'high' as const })
+  }
+  if (!analogyPatterns.some(p => p.test(content))) {
+    gaps.push({ text: '没有使用生活化类比，纯概念描述可能难以理解', priority: 'medium' as const })
+  }
+  if (len < 100) {
+    gaps.push({ text: '讲解偏短，可能缺少展开或举例', priority: 'medium' as const })
+  }
+  if (!depthPatterns.slice(0, 2).some(p => p.test(content))) {
+    gaps.push({ text: '可补充与相关概念的对比或因果关系', priority: 'low' as const })
+  }
+
+  // ====== 追问生成 ======
+  const followUps: string[] = []
+  if (!/终止|停止|结束/.test(content)) {
+    followUps.push('如果递归没有终止条件，会发生什么？')
+  }
+  if (!/栈溢出|内存|性能|效率/.test(content)) {
+    followUps.push('递归调用过深时会有什么风险？如何避免？')
+  }
+  if (!/迭代|循环|非递归/.test(content)) {
+    followUps.push('这个问题能用非递归方式解决吗？两种方式各有什么优劣？')
+  }
+  if (followUps.length === 0) {
+    followUps.push('能举一个这个概念在实际开发中的应用场景吗？')
+  }
+
+  // ====== 反馈文案 ======
+  let feedback = ''
+  if (totalScore >= 85) {
+    feedback = '讲解非常清晰！结构完整，有类比有深度。继续保持这种「教别人」的方式，你对这个概念的理解已经很扎实了。'
+  } else if (totalScore >= 70) {
+    feedback = '讲解整体不错，已经抓住了核心要点。如果能补充更多生活化的类比或具体例子，效果会更好。建议重点补充目前发现的薄弱点。'
+  } else if (totalScore >= 55) {
+    feedback = '讲解覆盖了基本内容，但还有提升空间。建议先确保解释了「是什么」和「为什么」，再用生活中的例子帮助理解。不要太担心说得不够专业——简单往往更好。'
+  } else {
+    feedback = '讲解还比较简短，可能只说了结论而没有展开过程。试试这样讲：假设你在给一个完全不懂的朋友解释，你会从哪里开始？用什么例子？记住：能简单讲清楚才是真的懂。'
+  }
+
+  return {
+    score: totalScore,
+    dimensions: [
+      { name: '内容完整性', score: completenessScore },
+      { name: '类比运用', score: analogyScore },
+      { name: '表达清晰度', score: clarityScore },
+      { name: '深度洞察', score: depthScore },
+    ],
+    gaps,
+    feedback,
+    followUpQuestions: followUps,
   }
 }
 
@@ -216,23 +432,49 @@ async function handleSubmitScore() {
   if (!editorContent.value.trim()) return
 
   isScoring.value = true
+
+  // 模拟短暂处理时间，让用户感知到"正在分析"
+  await new Promise(r => setTimeout(r, 600))
+
+  // 始终使用本地评分，不需要 API
+  scoreResult.value = localScore(editorContent.value)
+
+  isScoring.value = false
+}
+
+function continueEditing() {
+  // 清除评分结果，回到编辑状态
+  scoreResult.value = null
+  // 滚动回编辑器
+  editorRef.value?.focus()
+}
+
+function saveSession() {
+  // 保存到 localStorage
   try {
-    const topic = '递归' // 可从路由参数或上下文获取
-    const result = await scoreExplanation(editorContent.value, topic)
-    aiResult.value = result
-    // 将评分数据通过 query params 传递到诊断页
-    router.push({
-      path: '/explain/new/diagnosis',
-      query: {
-        score: String(result.score),
-        content: encodeURIComponent(editorContent.value),
-        topic: encodeURIComponent(topic),
-      },
+    const sessions = JSON.parse(localStorage.getItem('feiman_sessions') || '[]')
+    sessions.push({
+      id: crypto.randomUUID(),
+      topicId: 'recursion',
+      content: editorContent.value,
+      score: scoreResult.value?.score || 0,
+      type: 'text',
+      createdAt: new Date().toISOString(),
     })
-  } catch (err) {
-    alert('评分失败：' + (err instanceof Error ? err.message : '未知错误'))
-  } finally {
-    isScoring.value = false
+    localStorage.setItem('feiman_sessions', JSON.stringify(sessions))
+    alert('✅ 讲解已保存！可在「讲解记录」中查看。')
+  } catch {
+    alert('保存失败，请重试')
   }
 }
 </script>
+
+<style scoped>
+@keyframes fade-up {
+  from { opacity: 0; transform: translateY(12px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.animate-fade-up {
+  animation: fade-up 0.35s ease-out both;
+}
+</style>
