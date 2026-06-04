@@ -101,12 +101,14 @@
 </template>
 
 <script setup lang="ts">
-import { reactive, ref } from 'vue'
+import { reactive, ref, inject } from 'vue'
 import { useRouter } from 'vue-router'
 import { ArrowLeft, Sparkles } from 'lucide-vue-next'
 import { generateLearningPath, isAIReady, isLoading } from '@/composables/useDeepSeek'
+import type { StudyTopic, Chapter } from '@/types/topic'
 
 const router = useRouter()
+const showToast = inject<(message: string, type?: 'success' | 'error' | 'info' | 'warning', duration?: number) => void>('toast') || ((msg: string) => console.log(msg))
 
 const form = reactive({
   goalName: '',
@@ -116,86 +118,179 @@ const form = reactive({
 
 const selectedPrefs = ref<string[]>(['beginner'])
 const isGenerating = ref(false)
-const generatedPath = ref<null | {
-  title: string
-  chapters: { title: string; description: string; days: number }[]
-  dailyTasks: string[]
-  suggestions: string
-}>(null)
 
 const preferences = [
-  {
-    key: 'beginner',
-    label: '讲授小白听',
-    activeClass: 'bg-blue-50 border border-blue-300 text-blue-700',
-  },
-  {
-    key: 'exam',
-    label: '考试冲刺',
-    activeClass: 'bg-orange-50 border border-orange-300 text-orange-700',
-  },
-  {
-    key: 'project',
-    label: '项目实践',
-    activeClass: 'bg-green-50 border border-green-300 text-green-700',
-  },
-  {
-    key: 'interview',
-    label: '面试问答',
-    activeClass: 'bg-purple-50 border border-purple-300 text-purple-700',
-  },
+  { key: 'beginner', label: '讲授小白听', activeClass: 'bg-blue-50 border border-blue-300 text-blue-700' },
+  { key: 'exam', label: '考试冲刺', activeClass: 'bg-orange-50 border border-orange-300 text-orange-700' },
+  { key: 'project', label: '项目实践', activeClass: 'bg-green-50 border border-green-300 text-green-700' },
+  { key: 'interview', label: '面试问答', activeClass: 'bg-purple-50 border border-purple-300 text-purple-700' },
 ]
 
 function togglePref(key: string) {
   const idx = selectedPrefs.value.indexOf(key)
-  if (idx >= 0) {
-    selectedPrefs.value.splice(idx, 1)
+  if (idx >= 0) selectedPrefs.value.splice(idx, 1)
+  else selectedPrefs.value.push(key)
+}
+
+/**
+ * 本地生成学习路径（不依赖 AI）
+ * 根据目标名称智能拆解章节
+ */
+function generateLocalPath(goalName: string): StudyTopic {
+  // 根据目标关键词匹配预设模板
+  const goalLower = goalName.toLowerCase()
+
+  let chapters: Chapter[]
+
+  if (goalLower.includes('vue') || goalLower.includes('前端') || goalLower.includes('工程化')) {
+    chapters = [
+      { id: 'c1', title: '基础概念入门', completed: false, progress: 0 },
+      { id: 'c2', title: '组件化开发核心', completed: false, progress: 0 },
+      { id: 'c3', title: '响应式原理深入', completed: false, progress: 0 },
+      { id: 'c4', title: '路由与状态管理', completed: false, progress: 0 },
+      { id: 'c5', title: '工程化与性能优化', completed: false, progress: 0 },
+    ]
+  } else if (goalLower.includes('网络') || goalLower.includes('http') || goalLower.includes('tcp')) {
+    chapters = [
+      { id: 'c1', title: '网络模型分层 (OSI/TCP-IP)', completed: false, progress: 0 },
+      { id: 'c2', title: 'HTTP/HTTPS 协议详解', completed: false, progress: 0 },
+      { id: 'c3', title: 'TCP/IP 三次握手与四次挥手', completed: false, progress: 0 },
+      { id: 'c4', title: 'DNS 解析与 CDN 原理', completed: false, progress: 0 },
+      { id: 'c5', title: '网络安全与加密机制', completed: false, progress: 0 },
+    ]
+  } else if (goalLower.includes('算法') || goalLower.includes('数据结构') || goalLower.includes('递归')) {
+    chapters = [
+      { id: 'c1', title: '时间复杂度与空间复杂度', completed: false, progress: 0 },
+      { id: 'c2', title: '数组、链表与栈队列', completed: false, progress: 0 },
+      { id: 'c3', title: '树与图的基础遍历', completed: false, progress: 0 },
+      { id: 'c4', title: '排序与查找算法', completed: false, progress: 0 },
+      { id: 'c5', title: '动态规划入门', completed: false, progress: 0 },
+    ]
+  } else if (goalLower.includes('数学') || goalLower.includes('微积分') || goalLower.includes('线性')) {
+    chapters = [
+      { id: 'c1', title: '基础概念与定义', completed: false, progress: 0 },
+      { id: 'c2', title: '核心公式推导', completed: false, progress: 0 },
+      { id: 'c3', title: '典型例题分析', completed: false, progress: 0 },
+      { id: 'c4', title: '应用场景与实践', completed: false, progress: 0 },
+      { id: 'c5', title: '综合复习与测验', completed: false, progress: 0 },
+    ]
+  } else if (goalLower.includes('操作系统') || goalLower.includes('进程') || goalLower.includes('线程')) {
+    chapters = [
+      { id: 'c1', title: '进程与线程基础', completed: false, progress: 0 },
+      { id: 'c2', title: '调度算法与死锁', completed: false, progress: 0 },
+      { id: 'c3', title: '内存管理机制', completed: false, progress: 0 },
+      { id: 'c4', title: '文件系统与 I/O', completed: false, progress: 0 },
+      { id: 'c5', title: '综合实战演练', completed: false, progress: 0 },
+    ]
   } else {
-    selectedPrefs.value.push(key)
+    // 通用模板
+    chapters = [
+      { id: 'c1', title: '基础概念入门', completed: false, progress: 0 },
+      { id: 'c2', title: '核心机制深入', completed: false, progress: 0 },
+      { id: 'c3', title: '实战案例分析', completed: false, progress: 0 },
+      { id: 'c4', title: '高级应用技巧', completed: false, progress: 0 },
+      { id: 'c5', title: '综合测验与复习', completed: false, progress: 0 },
+    ]
+  }
+
+  // 随机分配颜色
+  const colors = ['#4F6EF7', '#10B981', '#F59E0B', '#8B5CF6', '#EC4899', '#06B6D4']
+  const randomColor = colors[Math.floor(Math.random() * colors.length)]
+
+  return {
+    id: crypto.randomUUID(),
+    title: goalName,
+    tags: selectedPrefs.value,
+    status: 'active' as const,
+    progress: 0,
+    createdAt: new Date().toISOString(),
+    chapters,
+    color: randomColor,
+  }
+}
+
+/**
+ * 将路径保存到 localStorage
+ */
+function saveTopicToStorage(topic: StudyTopic): void {
+  try {
+    const raw = localStorage.getItem('feiman_topics')
+    const topics: StudyTopic[] = raw ? JSON.parse(raw) : []
+    topics.push(topic)
+    localStorage.setItem('feiman_topics', JSON.stringify(topics))
+  } catch (e) {
+    console.error('保存学习路径失败:', e)
+    throw new Error('存储写入失败')
   }
 }
 
 async function handleGenerate() {
   // 表单校验
   if (!form.goalName.trim()) {
-    alert('请填写目标名称')
+    showToast('请填写目标名称', 'warning')
     return
   }
   if (!form.currentLevel.trim()) {
-    alert('请填写当前水平')
+    showToast('请填写当前水平', 'warning')
     return
   }
   if (!form.timeCommitment.trim()) {
-    alert('请填写预计投入时间')
+    showToast('请填写预计投入时间', 'warning')
     return
   }
 
-  // 获取偏好标签的中文显示名
   const prefLabels = selectedPrefs.value.map(key => {
     const found = preferences.find(p => p.key === key)
     return found ? found.label : key
   })
 
-  if (isAIReady.value) {
-    isGenerating.value = true
-    try {
-      generatedPath.value = await generateLearningPath(
+  isGenerating.value = true
+
+  try {
+    let newTopic: StudyTopic
+
+    if (isAIReady.value) {
+      // AI 模式：调用 API 生成
+      const aiResult = await generateLearningPath(
         form.goalName,
         form.currentLevel,
         form.timeCommitment,
         prefLabels
       )
-      alert('✅ 学习路径生成成功！共 ' + generatedPath.value.chapters.length + ' 个章节')
-      router.push('/paths')
-    } catch (err) {
-      alert('AI 生成失败：' + (err instanceof Error ? err.message : '未知错误'))
-    } finally {
-      isGenerating.value = false
+      // 将 AI 结果转换为 StudyTopic 格式
+      newTopic = {
+        id: crypto.randomUUID(),
+        title: form.goalName,
+        tags: prefLabels,
+        status: 'active' as const,
+        progress: 0,
+        createdAt: new Date().toISOString(),
+        chapters: (aiResult.chapters || []).map((ch, i) => ({
+          id: `ch-${i + 1}`,
+          title: ch.title || `章节 ${i + 1}`,
+          completed: false,
+          progress: 0,
+        })),
+        color: '#4F6EF7',
+      }
+    } else {
+      // 本地模式：根据目标名称智能生成
+      newTopic = generateLocalPath(form.goalName)
     }
-  } else {
-    // 降级：未配置 API Key 时使用模拟行为
-    alert('请先配置 API Key 或使用本地模拟模式')
-    router.push('/paths')
+
+    // 保存到 localStorage
+    saveTopicToStorage(newTopic)
+
+    showToast(`「${newTopic.title}」创建成功！共 ${newTopic.chapters.length} 个章节`, 'success')
+
+    // 跳转到新创建的路径详情页
+    setTimeout(() => {
+      router.push(`/paths/${newTopic.id}`)
+    }, 500)
+  } catch (err) {
+    showToast('生成失败：' + (err instanceof Error ? err.message : '请重试'), 'error')
+  } finally {
+    isGenerating.value = false
   }
 }
 </script>

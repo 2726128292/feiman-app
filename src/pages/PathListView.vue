@@ -95,14 +95,38 @@ import { ref, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { Search, BookOpen, Sparkles } from 'lucide-vue-next'
 import { mockTopics } from '@/utils/mock'
+import type { StudyTopic } from '@/types/topic'
 
 const router = useRouter()
 const searchQuery = ref('')
 
+// 优先从 localStorage 读取真实数据，无数据时使用 mock
+const allTopics = ref<StudyTopic[]>([])
+
+function loadTopics() {
+  try {
+    const raw = localStorage.getItem('feiman_topics')
+    if (raw) {
+      const stored: StudyTopic[] = JSON.parse(raw)
+      if (stored.length > 0) {
+        allTopics.value = stored
+        return
+      }
+    }
+  } catch {
+    // 解析失败时降级到 mock 数据
+  }
+  // 无 localStorage 数据时使用 mock
+  allTopics.value = mockTopics as unknown as StudyTopic[]
+}
+
+// 初始加载
+loadTopics()
+
 const filteredTopics = computed(() => {
-  if (!searchQuery.value.trim()) return mockTopics
+  if (!searchQuery.value.trim()) return allTopics.value
   const q = searchQuery.value.toLowerCase()
-  return mockTopics.filter(
+  return allTopics.value.filter(
     (t) =>
       t.title.toLowerCase().includes(q) ||
       t.tags.some((tag) => tag.toLowerCase().includes(q))
