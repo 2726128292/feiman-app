@@ -15,6 +15,7 @@ const DEEPSEEK_MODEL = 'deepseek-chat'
 
 // 存储键名
 const STORAGE_KEY = 'feiman_deepseek_config'
+const ENABLED_KEY = 'feiman_ai_enabled'
 
 /** AI 配置 */
 interface DeepSeekConfig {
@@ -35,8 +36,29 @@ const config = useStorage<DeepSeekConfig>(STORAGE_KEY, defaultConfig)
 const isLoading = ref(false)
 const lastError = ref<string>('')
 
-/** 是否已配置 API Key */
-export const isAIReady = computed(() => !!config.value.apiKey?.trim())
+/** AI 功能总开关（默认开启） */
+function readAIEnabled(): boolean {
+  try {
+    const val = localStorage.getItem(ENABLED_KEY)
+    return val === null ? true : val === 'true'
+  } catch { return true }
+}
+const isAIEnabled = ref(readAIEnabled())
+
+/** 是否已配置 API Key 且 AI 开关已打开 */
+export const isAIReady = computed(() => isAIEnabled.value && !!config.value.apiKey?.trim())
+
+/** AI 功能总开关状态（供 UI 绑定） */
+export { isAIEnabled }
+
+/**
+ * 切换 AI 总开关
+ */
+export function toggleAIEnabled(enabled?: boolean) {
+  const next = enabled ?? !isAIEnabled.value
+  isAIEnabled.value = next
+  try { localStorage.setItem(ENABLED_KEY, String(next)) } catch { /* ignore */ }
+}
 
 /** 获取当前配置（只读） */
 export function getAIConfig(): Readonly<DeepSeekConfig> {

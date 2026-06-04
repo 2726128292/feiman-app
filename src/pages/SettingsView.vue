@@ -164,12 +164,32 @@
           <div>
             <p class="text-sm font-semibold text-slate-800">DeepSeek AI 助手</p>
             <p class="text-xs" :class="isAIReady ? 'text-emerald-500' : 'text-slate-400'">
-              {{ isAIReady ? '已连接 · 可用' : '未配置 · 使用本地模拟' }}
+              {{ isAIReady ? '已连接 · 可用' : isAIEnabled ? '未配置 · 使用本地模拟' : '已关闭 · 全部使用本地功能' }}
             </p>
           </div>
         </div>
 
-        <div v-if="!showKeyInput" class="flex items-center gap-2">
+        <!-- AI 总开关 -->
+        <div class="flex items-center justify-between py-2 px-1 rounded-xl bg-slate-50">
+          <div class="flex items-center gap-2">
+            <Power :size="15" :class="isAIEnabled ? 'text-emerald-500' : 'text-slate-300'" />
+            <span class="text-xs font-medium" :class="isAIEnabled ? 'text-slate-700' : 'text-slate-400'">
+              {{ isAIEnabled ? 'AI 功能已开启' : 'AI 功能已关闭' }}
+            </span>
+          </div>
+          <div
+            class="w-10 h-5.5 rounded-full transition-colors shrink-0 relative cursor-pointer"
+            :class="isAIEnabled ? 'bg-emerald-500' : 'bg-slate-200'"
+            @click="toggleAIEnabled()"
+          >
+            <div
+              class="absolute top-0.5 w-4.5 h-4.5 rounded-full bg-white shadow-sm transition-all duration-200"
+              :class="isAIEnabled ? 'right-[2px]' : 'left-[2px]'"
+            />
+          </div>
+        </div>
+
+        <div v-if="!showKeyInput" class="flex items-center gap-2" :class="{ 'opacity-40 pointer-events-none': !isAIEnabled }">
           <div
             class="flex-1 px-3 py-2 rounded-xl text-xs font-mono truncate"
             :class="isAIReady ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-400'"
@@ -184,7 +204,7 @@
           </button>
         </div>
 
-        <div v-else class="space-y-2.5">
+        <div v-else class="space-y-2.5" :class="{ 'opacity-40 pointer-events-none': !isAIEnabled }">
           <input
             v-model="apiKeyInput"
             type="password"
@@ -269,9 +289,11 @@
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue'
 import { useRouter } from 'vue-router'
-import { Moon, Bell, Database, Download, Shield, ChevronRight, Sparkles, LoaderCircle, Check, ShieldCheck, WifiOff, Key, RotateCcw } from 'lucide-vue-next'
+import { Moon, Bell, Database, Download, Shield, ChevronRight, Sparkles, LoaderCircle, Check, ShieldCheck, WifiOff, Key, RotateCcw, Power } from 'lucide-vue-next'
 import {
   isAIReady,
+  isAIEnabled,
+  toggleAIEnabled,
   getAIConfig,
   updateAIConfig,
   isLoading as aiLoading,
