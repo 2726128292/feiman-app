@@ -117,6 +117,35 @@
         </div>
       </div>
 
+      <!-- 关联章节选择器 -->
+      <div v-if="hasRecorded" class="bg-slate-800/60 backdrop-blur-sm rounded-2xl p-4 border border-slate-700/50">
+        <h3 class="text-sm font-bold text-slate-200 mb-3 flex items-center gap-2">
+          <Link2 :size="15" /> 关联到学习路径（可选）
+        </h3>
+
+        <!-- 选择学习路径 -->
+        <select
+          v-model="selectedTopicId"
+          class="w-full px-3 py-2.5 mb-2 rounded-xl bg-slate-700/80 border border-slate-600 text-sm text-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500/20 appearance-none cursor-pointer"
+          @change="onTopicChange"
+        >
+          <option value="">— 不关联路径 —</option>
+          <option v-for="t in availableTopics" :key="t.id" :value="t.id">{{ t.title }}</option>
+        </select>
+
+        <!-- 选择章节（选择了路径后才显示） -->
+        <select
+          v-if="selectedTopicId"
+          v-model="selectedChapterId"
+          class="w-full px-3 py-2.5 rounded-xl bg-slate-700/80 border border-slate-600 text-sm text-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500/20 appearance-none cursor-pointer"
+        >
+          <option value="">— 不关联章节 —</option>
+          <option v-for="ch in selectedTopicChapters" :key="ch.id" :value="ch.id">{{ ch.title }}</option>
+        </select>
+
+        <p class="text-[11px] text-slate-500 mt-2">关联后可在对应章节中查看和回放此录音</p>
+      </div>
+
       <!-- 保存录音按钮 -->
       <button
         v-if="hasRecorded"
@@ -148,6 +177,12 @@
               <p class="text-[11px] text-slate-500">
                 {{ item.duration }}秒 · {{ formatTimeAgo(item.createdAt) }} · 语速{{ item.wpm }}字/分
               </p>
+              <!-- 关联标签 -->
+              <div v-if="item.chapterTitle" class="mt-0.5">
+                <span class="inline-flex items-center gap-0.5 text-[10px] px-1.5 py-0.5 rounded-full bg-blue-500/15 text-blue-400">
+                  <Link2 :size="10" /> {{ item.chapterTitle }}
+                </span>
+              </div>
             </div>
             <button class="text-slate-600 hover:text-red-400 shrink-0 cursor-pointer" @click="deleteRecording(item.id)">
               <Trash2 :size="14" />
@@ -172,11 +207,12 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onUnmounted, inject } from 'vue'
-import { useRouter } from 'vue-router'
-import { Clock, Play, Trash2 } from 'lucide-vue-next'
+import { ref, computed, onUnmounted, onMounted, inject } from 'vue'
+import { useRouter, useRoute } from 'vue-router'
+import { Clock, Play, Trash2, Link2 } from 'lucide-vue-next'
 
 const router = useRouter()
+const route = useRoute()
 
 // 注入全局 Toast
 const showToast = inject<(message: string, type?: 'success' | 'error' | 'info' | 'warning', duration?: number) => void>('toast') || ((msg: string) => console.log(msg))
@@ -210,6 +246,53 @@ const metrics = ref({
   wpm: 0,
   pauseStatus: 'normal' as 'normal' | 'long',
   clarityScore: 0,
+})
+
+// ====== 关联章节选择器 ======
+const selectedTopicId = ref('')
+const selectedChapterId = ref('')
+const availableTopics = ref<Array<{id: string; title: string; chapters: Array<{id: string; title: string}>}>>([])
+
+/** 当前选中路径的章节数组 */
+const selectedTopicChapters = computed(() => {
+  if (!selectedTopicId.value) return []
+  const t = availableTopics.value.find(t => t.id === selectedTopicId.value)
+  return t?.chapters || []
+})
+
+/** 加载可用的学习路径列表 */
+function loadAvailableTopics(): void {
+  try {
+    const raw = localStorage.getItem('feiman_topics')
+    if (raw) {
+      const topics = JSON.parse(raw)
+      availableTopics.value = (Array.isArray(topics) ? topics : []).map((t: any) => ({
+        id: t.id,
+        title: t.title,
+        chapters: t.chapters || [],
+      }))
+    }
+  } catch { /* ignore */ }
+}
+
+/** 路径切换时重置章节选择 */
+function onTopicChange(): void {
+  selectedChapterId.value = ''
+}
+
+// 初始加载可用路径
+loadAvailableTopics()
+
+// 从路由参数预填（如果是从章节详情页过来的）
+onMounted(() => {
+  const fromTopicId = route.query.topicId as string
+  const fromChapterId = route.query.chapterId as string
+  if (fromTopicId) {
+    selectedTopicId.value = fromTopicId
+    if (fromChapterId) {
+      selectedChapterId.value = fromChapterId
+    }
+  }
 })
 
 // ====== 计算属性 ======
@@ -522,6 +605,9 @@ const historyList = ref<Array<{
   wpm: number
   clarity: number
   createdAt: string
+  topicId?: string   // 关联的学习路径ID
+  chapterId?: string  // 关联的章节ID
+  chapterTitle?: string // 章节标题（用于显示）
 }>>([])
 
 /** 历史录音播放引用 */
@@ -573,6 +659,12 @@ function saveRecording(): void {
         wpm: metrics.value.wpm,
         clarity: metrics.value.clarityScore,
         createdAt: new Date().toISOString(),
+        // 关联信息
+        topicId: selectedTopicId.value || undefined,
+        chapterId: selectedChapterId.value || undefined,
+        chapterTitle: selectedChapterId.value
+          ? selectedTopicChapters.value.find(c => c.id === selectedChapterId.value)?.title
+          : undefined,
       })
 
       // 只保留最近 10 条

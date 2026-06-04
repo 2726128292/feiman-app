@@ -106,13 +106,22 @@
               </div>
             </div>
           </div>
-          <!-- 右侧：进度百分比 -->
-          <span
-            class="text-lg font-bold ml-4 shrink-0 tabular-nums"
-            :style="{ color: topic.color }"
-          >
-            {{ topic.progress }}%
-          </span>
+          <!-- 右侧：进度百分比 + 删除按钮 -->
+          <div class="flex items-center shrink-0 ml-4">
+            <span
+              class="text-lg font-bold tabular-nums"
+              :style="{ color: topic.color }"
+            >
+              {{ topic.progress }}%
+            </span>
+            <!-- 删除按钮 -->
+            <button
+              class="ml-2 w-8 h-8 flex items-center justify-center rounded-lg text-slate-300 hover:text-red-500 hover:bg-red-50 active:bg-red-100 transition-colors shrink-0"
+              @click.stop="confirmDeleteTopic(topic)"
+            >
+              <Trash2 :size="16" />
+            </button>
+          </div>
           <!-- 内容层结束 -->
           </div>
         </div>
@@ -154,8 +163,9 @@
                 </div>
                 <div>
                   <h3 class="text-base font-semibold text-slate-800 dark:text-slate-100">确认删除</h3>
-                  <p class="text-xs text-slate-400 mt-0.5">
-                    确定要删除「{{ deleteTargetTopic.title }}」这条学习路径吗？
+                  <p class="text-xs text-slate-400 mt-0.5 leading-relaxed">
+                    确定要删除「{{ deleteTargetTopic.title }}」这条学习路径吗？<br/>
+                    该路径的所有章节、笔记、录音和讲解记录都将被清除。
                   </p>
                 </div>
               </div>
@@ -205,7 +215,7 @@ function confirmDeleteTopic(topic: StudyTopic) {
   showDeleteConfirm.value = true
 }
 
-/** 执行删除操作：从列表移除 → 持久化到 localStorage → Toast 提示 */
+/** 执行删除操作：从列表移除 → 持久化到 localStorage → 清理关联数据 → Toast 提示 */
 function executeDeleteTopic() {
   const topic = deleteTargetTopic.value
   if (!topic) return
@@ -217,13 +227,47 @@ function executeDeleteTopic() {
     try {
       localStorage.setItem('feiman_topics', JSON.stringify(allTopics.value))
     } catch { /* 忽略 */ }
-    // 删除成功提示（显示被删除的路径名称）
-    showToast?.(`已删除「${topic.title}」`, 'warning')
+
+    // ====== 清理关联数据 ======
+    cleanupRelatedData(topic.id, topic.title)
+
+    showToast?.(`已删除「${topic.title}」及全部关联数据`, 'warning')
   }
 
   // 关闭弹窗并清理状态
   showDeleteConfirm.value = false
   deleteTargetTopic.value = null
+}
+
+/** 清理路径关联的所有数据 */
+function cleanupRelatedData(topicId: string, _topicTitle: string): void {
+  try {
+    // 1. 清理该主题下的讲解记录 (feiman_sessions 中 topicId 匹配)
+    const sessionsRaw = localStorage.getItem('feiman_sessions')
+    if (sessionsRaw) {
+      const sessions = JSON.parse(sessionsRaw)
+      const filtered = sessions.filter((s: any) => s.topicId !== topicId)
+      localStorage.setItem('feiman_sessions', JSON.stringify(filtered))
+    }
+
+    // 2. 清理该主题下的笔记 (feiman_notes 中 targetId 匹配章节ID或主题ID)
+    const notesRaw = localStorage.getItem('feiman_notes')
+    if (notesRaw) {
+      const notes = JSON.parse(notesRaw)
+      const filtered = notes.filter((n: any) => n.targetId !== topicId)
+      localStorage.setItem('feiman_notes', JSON.stringify(filtered))
+    }
+
+    // 3. 清理该主题关联的录音 (feiman_voice_recordings 中 topicId 匹配)
+    const voiceRaw = localStorage.getItem('feiman_voice_recordings')
+    if (voiceRaw) {
+      const voices = JSON.parse(voiceRaw)
+      const filtered = voices.filter((v: any) => v.topicId !== topicId)
+      localStorage.setItem('feiman_voice_recordings', JSON.stringify(filtered))
+    }
+  } catch {
+    /* 静默处理清理失败 */
+  }
 }
 
 // ==================== 滑动手势跟踪 ====================

@@ -29,6 +29,13 @@
         >
           <Share2 :size="14" /> 分享
         </button>
+        <!-- 删除整条路径按钮 -->
+        <button
+          class="shrink-0 px-3 py-1.5 rounded-lg text-xs font-medium bg-red-50 text-red-500 hover:bg-red-100 active:bg-red-200 transition-colors flex items-center gap-1"
+          @click="showPathDeleteConfirm = true"
+        >
+          <Trash2 :size="14" /> 删除
+        </button>
       </div>
 
       <!-- 总进度概览 -->
@@ -239,6 +246,43 @@
               />
             </div>
           </div>
+
+          <!-- 章节关联录音展示 -->
+          <div v-if="getChapterRecordings(chapter.id).length > 0" class="px-4 pb-3 pt-1">
+            <div class="mt-1 pt-2 border-t border-dashed border-slate-200">
+              <p class="text-[11px] text-slate-400 mb-2 flex items-center gap-1">
+                <Mic :size="12" /> 关联录音 ({{ getChapterRecordings(chapter.id).length }})
+              </p>
+              <div class="space-y-1.5">
+                <div
+                  v-for="rec in getChapterRecordings(chapter.id)"
+                  :key="rec.id"
+                  class="flex items-center gap-2 px-2.5 py-2 rounded-xl bg-slate-50 dark:bg-slate-700/50 group"
+                >
+                  <!-- 播放/暂停按钮 -->
+                  <button
+                    class="w-7 h-7 rounded-full bg-blue-500 flex items-center justify-center shrink-0 transition-transform active:scale-90"
+                    @click="playingRecordingId === rec.id ? stopRecordingPlayback() : playRecording(rec)"
+                  >
+                    <Pause v-if="playingRecordingId === rec.id" :size="12" class="text-white" />
+                    <Play v-else :size="11" class="text-white ml-0.5" />
+                  </button>
+                  <!-- 录音信息 -->
+                  <div class="flex-1 min-w-0">
+                    <p class="text-xs font-medium text-slate-700 dark:text-slate-300 truncate">{{ rec.topic || '语音讲解' }}</p>
+                    <p class="text-[10px] text-slate-400">{{ rec.duration }}秒 · 语速{{ rec.wpm }}字/分 · {{ formatRecTimeAgo(rec.createdAt) }}</p>
+                  </div>
+                  <!-- 删除按钮 -->
+                  <button
+                    class="opacity-0 group-hover:opacity-100 w-6 h-6 flex items-center justify-center rounded text-slate-300 hover:text-red-500 transition-all shrink-0"
+                    @click="deleteChapterRecording(rec.id)"
+                  >
+                    <Trash2 :size="12" />
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -282,6 +326,51 @@
         返回路径列表
       </button>
     </div>
+
+    <!-- 删除整条路径确认弹窗 -->
+    <Teleport to="body">
+      <Transition name="fade">
+        <div
+          v-if="showPathDeleteConfirm && topic"
+          class="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-6"
+          @click="showPathDeleteConfirm = false"
+        >
+          <div
+            class="w-full max-w-sm bg-white dark:bg-slate-800 rounded-2xl p-5 space-y-4 animate-slide-up"
+            @click.stop
+          >
+            <div class="flex items-center gap-3">
+              <div class="w-10 h-10 rounded-full bg-red-50 flex items-center justify-center shrink-0">
+                <Trash2 :size="20" class="text-red-500" />
+              </div>
+              <div>
+                <h3 class="text-base font-semibold text-slate-800 dark:text-slate-100">删除学习路径</h3>
+                <p class="text-xs text-slate-400 mt-0.5 leading-relaxed">
+                  确定「{{ topic.title }}」吗？<br/>
+                  所有章节、知识点、笔记、录音都将被永久删除。
+                </p>
+              </div>
+            </div>
+            <div class="flex gap-3">
+              <button
+                class="flex-1 py-2.5 rounded-xl text-sm font-medium bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 active:bg-slate-200 transition-colors"
+                style="min-height: 44px;"
+                @click="showPathDeleteConfirm = false"
+              >
+                取消
+              </button>
+              <button
+                class="flex-1 py-2.5 rounded-xl text-sm font-medium bg-red-500 text-white active:bg-red-600 transition-colors shadow-lg shadow-red-500/25"
+                style="min-height: 44px;"
+                @click="deleteEntirePath"
+              >
+                确认删除
+              </button>
+            </div>
+          </div>
+        </div>
+      </Transition>
+    </Teleport>
   </div>
 </template>
 
@@ -299,6 +388,10 @@ import {
   ChevronUp,
   Layers,
   StickyNote,
+  Share2,
+  Mic,
+  Play,
+  Pause,
 } from 'lucide-vue-next'
 import type { StudyTopic, Chapter, KnowledgePoint } from '@/types'
 import { useXPSystem } from '@/composables/useXPSystem'
@@ -316,6 +409,104 @@ const xpSystem = useXPSystem()
 const notesSystem = useNotes()
 const showNoteEditor = ref<string | null>(null)  // 当前展开笔记编辑器的章节ID
 const noteContents = ref<Record<string, string>>({})  // 各章节的笔记内容缓存
+
+// ====== 章节关联录音 ======
+interface VoiceRecording {
+  id: string
+  topic: string
+  duration: number
+  base64: string
+  mimeType: string
+  wpm: number
+  clarity: number
+  createdAt: string
+  chapterId?: string
+  chapterTitle?: string
+}
+
+/** 所有录音数据 */
+const allRecordings = ref<VoiceRecording[]>([])
+
+/** 正在播放的录音 ID */
+const playingRecordingId = ref<string | null>(null)
+
+/** 音频引用 */
+const recordingAudioRef = ref<HTMLAudioElement | null>(null)
+
+/** 加载所有录音 */
+function loadAllRecordings(): void {
+  try {
+    const raw = localStorage.getItem('feiman_voice_recordings')
+    allRecordings.value = raw ? JSON.parse(raw) : []
+  } catch {
+    allRecordings.value = []
+  }
+}
+
+/** 获取某章节的关联录音 */
+function getChapterRecordings(chapterId: string): VoiceRecording[] {
+  return allRecordings.value.filter(r => r.chapterId === chapterId)
+}
+
+/** 播放录音 */
+function playRecording(recording: VoiceRecording): void {
+  // 先停止当前播放
+  if (recordingAudioRef.value) {
+    recordingAudioRef.value.pause()
+    recordingAudioRef.value = null
+  }
+  playingRecordingId.value = null
+
+  const audio = new Audio(`data:${recording.mimeType};base64,${recording.base64}`)
+  recordingAudioRef.value = audio
+  playingRecordingId.value = recording.id
+
+  audio.play().catch(() => showToast?.('播放失败', 'error'))
+  audio.onended = () => {
+    playingRecordingId.value = null
+    recordingAudioRef.value = null
+  }
+}
+
+/** 停止播放 */
+function stopRecordingPlayback(): void {
+  if (recordingAudioRef.value) {
+    recordingAudioRef.value.pause()
+    recordingAudioRef.value = null
+  }
+  playingRecordingId.value = null
+}
+
+/** 格式化录音时间为相对时间 */
+function formatRecTimeAgo(isoDate: string): string {
+  const now = Date.now()
+  const then = new Date(isoDate).getTime()
+  const diffMs = now - then
+  const diffMin = Math.floor(diffMs / 60000)
+  const diffHour = Math.floor(diffMs / 3600000)
+  const diffDay = Math.floor(diffMs / 86400000)
+  if (diffMin < 1) return '刚刚'
+  if (diffMin < 60) return `${diffMin}分钟前`
+  if (diffHour < 24) return `${diffHour}小时前`
+  if (diffDay < 7) return `${diffDay}天前`
+  return new Date(isoDate).toLocaleDateString('zh-CN')
+}
+
+/** 删除章节关联的录音 */
+function deleteChapterRecording(recId: string): void {
+  try {
+    let recordings = JSON.parse(localStorage.getItem('feiman_voice_recordings') || '[]')
+    recordings = recordings.filter((r: { id: string }) => r.id !== recId)
+    localStorage.setItem('feiman_voice_recordings', JSON.stringify(recordings))
+    loadAllRecordings()
+    showToast?.('录音已删除', 'info')
+  } catch {
+    showToast?.('删除失败', 'error')
+  }
+}
+
+// 初始加载录音
+loadAllRecordings()
 
 /** 获取某章节的笔记内容 */
 function getChapterNote(chapterId: string): string {
@@ -552,7 +743,11 @@ function startLearning(chapterId: string): void {
     ch.progress = Math.max(ch.progress, 10)
     saveTopicsToStorage()
   }
-  router.push('/explain/new')
+  // 跳转到讲解页，携带路径和章节信息
+  router.push({
+    path: '/explain/new',
+    query: { topicId: topic.value!.id, chapterId },
+  })
 }
 
 // ==================== 章节标题编辑 ====================
@@ -866,4 +1061,83 @@ function importPathFromUrl(): StudyTopic | null {
     return null
   }
 }
+
+// ====== 路径删除功能 ======
+
+// 路径删除相关状态
+const showPathDeleteConfirm = ref(false)
+
+/** 删除整条路径并跳转回列表 */
+function deleteEntirePath(): void {
+  if (!topic.value) return
+
+  const topicId = topic.value.id
+
+  try {
+    // 从 localStorage 移除
+    let topics = JSON.parse(localStorage.getItem('feiman_topics') || '[]')
+    topics = topics.filter((t: any) => t.id !== topicId)
+    localStorage.setItem('feiman_topics', JSON.stringify(topics))
+
+    // 清理关联数据
+    cleanupRelatedDataForPath(topicId)
+
+    showToast?.('学习路径已删除', 'warning')
+    router.push('/paths')
+  } catch {
+    showToast?.('删除失败，请重试', 'error')
+  }
+}
+
+/** 清理路径关联的全部数据 */
+function cleanupRelatedDataForPath(topicId: string): void {
+  try {
+    // 讲解记录
+    const sessionsRaw = localStorage.getItem('feiman_sessions')
+    if (sessionsRaw) {
+      const s = JSON.parse(sessionsRaw)
+      localStorage.setItem('feiman_sessions', JSON.stringify(s.filter((x: any) => x.topicId !== topicId)))
+    }
+    // 笔记
+    const notesRaw = localStorage.getItem('feiman_notes')
+    if (notesRaw) {
+      const n = JSON.parse(notesRaw)
+      localStorage.setItem('feiman_notes', JSON.stringify(n.filter((x: any) => x.targetId !== topicId)))
+    }
+    // 录音
+    const voiceRaw = localStorage.getItem('feiman_voice_recordings')
+    if (voiceRaw) {
+      const v = JSON.parse(voiceRaw)
+      localStorage.setItem('feiman_voice_recordings', JSON.stringify(v.filter((x: any) => x.topicId !== topicId)))
+    }
+  } catch { /* ignore */ }
+}
 </script>
+
+<style scoped>
+/* 底部弹出动画 */
+@keyframes slide-up {
+  from {
+    transform: translateY(100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+.animate-slide-up {
+  animation: slide-up 0.25s ease-out;
+}
+
+/* 淡入淡出（用于删除确认弹窗） */
+.fade-enter-active,
+.fade-leave-active {
+  transition: opacity 0.2s ease;
+}
+.fade-enter-from,
+.fade-leave-to {
+  opacity: 0;
+}
+</style>
