@@ -147,6 +147,45 @@
         </div>
       </div>
 
+      <!-- 选中日期详情面板 -->
+      <div v-if="selectedDayDetail" class="bg-white dark:bg-slate-800 rounded-2xl p-4 shadow-sm">
+        <div class="flex items-center justify-between mb-3">
+          <h3 class="text-sm font-semibold text-slate-700 dark:text-slate-300">
+            {{ selectedDayDetail.dateStr }} 详情
+          </h3>
+          <span class="text-xs text-slate-400">{{ selectedDayDetail.weekDayName }}</span>
+        </div>
+
+        <!-- 该日统计 -->
+        <div class="grid grid-cols-3 gap-2 mb-3">
+          <div class="text-center bg-blue-50 rounded-lg py-2">
+            <p class="text-base font-bold text-[#4F6EF7]">{{ selectedDayDetail.sessionCount }}</p>
+            <p class="text-[10px] text-slate-500">讲解</p>
+          </div>
+          <div class="text-center bg-emerald-50 rounded-lg py-2">
+            <p class="text-base font-bold text-emerald-500">{{ selectedDayDetail.cardCount }}</p>
+            <p class="text-[10px] text-slate-500">闪卡</p>
+          </div>
+          <div class="text-center bg-orange-50 rounded-lg py-2">
+            <p class="text-base font-bold text-orange-500">{{ selectedDayDetail.pomodoroCount }}</p>
+            <p class="text-[10px] text-slate-500">番茄</p>
+          </div>
+        </div>
+
+        <!-- 该日学习列表 -->
+        <div v-if="selectedDayDetail.activities.length > 0" class="space-y-2">
+          <div v-for="(act, idx) in selectedDayDetail.activities" :key="idx"
+               class="flex items-center gap-2 p-2 rounded-lg bg-slate-50 dark:bg-slate-700">
+            <span class="w-1.5 h-1.5 rounded-full shrink-0" :class="act.colorClass" />
+            <span class="text-xs text-slate-600 dark:text-slate-300 truncate flex-1">{{ act.text }}</span>
+            <span class="text-[10px] text-slate-400">{{ act.time }}</span>
+          </div>
+        </div>
+        <div v-else class="text-center py-3">
+          <p class="text-xs text-slate-400">当天暂无学习记录</p>
+        </div>
+      </div>
+
       <!-- 任务时间线列表 -->
       <div class="space-y-4">
         <div
@@ -192,8 +231,40 @@ import { useToast } from '@/composables/useToast'
 const { showToast } = useToast()
 
 const weekDays = ['一', '二', '三', '四', '五', '六', '日']
-const weekDates = [1, 2, 3, 4, 5, 6, 7]
-const selectedDayIndex: Ref<number> = ref(3) // 周四
+
+// 计算本周一到日的真实日期
+const weekDates = computed(() => {
+  const now = new Date()
+  const dayOfWeek = now.getDay() || 7 // 周日=7
+  const monday = new Date(now)
+  monday.setDate(now.getDate() - dayOfWeek + 1)
+
+  const dates: number[] = []
+  for (let i = 0; i < 7; i++) {
+    const d = new Date(monday)
+    d.setDate(monday.getDate() + i)
+    dates.push(d.getDate())
+  }
+  return dates
+})
+
+// 完整的日期对象数组用于后续查询
+const weekDateObjects = computed(() => {
+  const now = new Date()
+  const dayOfWeek = now.getDay() || 7
+  const monday = new Date(now)
+  monday.setDate(now.getDate() - dayOfWeek + 1)
+
+  const dates: Date[] = []
+  for (let i = 0; i < 7; i++) {
+    const d = new Date(monday)
+    d.setDate(monday.getDate() + i)
+    dates.push(d)
+  }
+  return dates
+})
+
+const selectedDayIndex: Ref<number> = ref(new Date().getDay() === 0 ? 6 : new Date().getDay() - 1) // 今天
 
 // 番茄钟时长（分钟）
 const pomodoroDuration = ref(25)
@@ -242,20 +313,18 @@ function saveDailyGoal(): void {
  * 监听今日统计数据变化，检测是否达成目标并弹出提示
  */
 watch(
-  () => todayStats.value,
-  (stats) => {
-    // 检测讲解次数目标
-    if (dailyGoalSessions.value > 0 && stats.explainCount >= dailyGoalSessions.value && !goalNotified.value.sessions) {
+  [() => todayStats.value.explainCount, () => todayStats.value.reviewCards],
+  ([ec, rc]) => {
+    if (dailyGoalSessions.value > 0 && ec >= dailyGoalSessions.value && !goalNotified.value.sessions) {
       goalNotified.value.sessions = true
       showToast('🎉 今日讲解目标已完成！', 'success')
     }
-    // 检测闪卡复习目标
-    if (dailyGoalCards.value > 0 && stats.reviewCards >= dailyGoalCards.value && !goalNotified.value.cards) {
+    if (dailyGoalCards.value > 0 && rc >= dailyGoalCards.value && !goalNotified.value.cards) {
       goalNotified.value.cards = true
       showToast('🎉 今日闪卡复习目标已完成！', 'success')
     }
   },
-  { immediate: true, deep: true }
+  { immediate: true }
 )
 
 function isSelectedDay(i: number): boolean {
@@ -265,6 +334,82 @@ function isSelectedDay(i: number): boolean {
 function selectDay(i: number) {
   selectedDayIndex.value = i
 }
+
+// 选中日期详情
+const selectedDayDetail = computed(() => {
+  if (selectedDayIndex.value < 0 || selectedDayIndex.value >= weekDateObjects.value.length) return null
+
+  const targetDate = weekDateObjects.value[selectedDayIndex.value]
+  const dateStr = targetDate.toISOString().slice(0, 10)
+
+  const weekDayNames = ['周一', '周二', '周三', '周四', '周五', '周六', '周日']
+
+  // 统计该日的讲解数
+  let sessionCount = 0
+  let cardCount = 0
+  let pomodoroCount = 0
+  const activities: Array<{text: string; time: string; colorClass: string}> = []
+
+  try {
+    // 从 feiman_sessions 统计
+    const sessionsRaw = localStorage.getItem('feiman_sessions')
+    if (sessionsRaw) {
+      const sessions = JSON.parse(sessionsRaw)
+      const daySessions = sessions.filter((s: any) => (s.createdAt || '').startsWith(dateStr))
+      sessionCount = daySessions.length
+      daySessions.forEach((s: any) => {
+        activities.push({
+          text: s.topicId || s.content?.slice(0, 15) || '讲解',
+          time: (s.createdAt || '').slice(11, 16),
+          colorClass: 'bg-blue-500'
+        })
+      })
+    }
+
+    // 从 feiman_review_cards / feiman_cards 统计
+    for (const key of ['feiman_review_cards', 'feiman_cards']) {
+      const cardsRaw = localStorage.getItem(key)
+      if (cardsRaw) {
+        const cards = JSON.parse(cardsRaw)
+        const dayCards = cards.filter((c: any) => {
+          const lastReview = c.lastReview || c.reviewedAt || ''
+          return lastReview.toString().startsWith(dateStr)
+        })
+        if (dayCards.length > 0) {
+          cardCount += dayCards.length
+          dayCards.slice(0, 3).forEach((c: any) => {
+            activities.push({
+              text: c.question?.slice(0, 15) || '复习闪卡',
+              time: (c.lastReview || c.reviewedAt || '').slice(11, 16),
+              colorClass: 'bg-emerald-500'
+            })
+          })
+        }
+      }
+    }
+  } catch {}
+
+  // 番茄钟
+  try {
+    const pomodoroRaw = localStorage.getItem('feiman_pomodoro_history')
+    if (pomodoroRaw) {
+      const history = JSON.parse(pomodoroRaw)
+      const dayRecord = history.find((r: any) => r.date === dateStr)
+      if (dayRecord) {
+        pomodoroCount = dayRecord.count
+      }
+    }
+  } catch {}
+
+  return {
+    dateStr: `${targetDate.getMonth() + 1}月${targetDate.getDate()}日`,
+    weekDayName: weekDayNames[selectedDayIndex.value],
+    sessionCount,
+    cardCount,
+    pomodoroCount,
+    activities: activities.slice(0, 8), // 最多显示8条
+  }
+})
 
 const plan = ref(mockDailyPlans[0])
 
@@ -330,6 +475,19 @@ function onModeChange(mode: string): void {
   console.log(`番茄钟切换到模式: ${mode}`)
 }
 
+// ====== 共享数据缓存（避免重复 localStorage 读取）======
+
+/** 番茄钟历史记录（共享缓存） */
+const pomodoroHistoryRef = ref<PomodoroRecord[]>([])
+
+/** 刷新番茄钟历史缓存 */
+function refreshPomodoroHistory(): void {
+  pomodoroHistoryRef.value = getPomodoroHistory()
+}
+
+// 初始加载
+refreshPomodoroHistory()
+
 // ====== 番茄钟历史统计 ======
 
 /** 番茄钟历史记录类型 */
@@ -369,6 +527,8 @@ function recordPomodoroComplete(): void {
   const cutoff = new Date(Date.now() - 90 * 86400000).toISOString().slice(0, 10)
   const filtered = history.filter((r: PomodoroRecord) => r.date >= cutoff)
   localStorage.setItem('feiman_pomodoro_history', JSON.stringify(filtered))
+  // 刷新共享缓存
+  refreshPomodoroHistory()
 }
 
 /** 今日日期字符串 YYYY-MM-DD */
@@ -376,13 +536,13 @@ const todayStr = new Date().toISOString().slice(0, 10)
 
 /** 今日完成的番茄数 */
 const todayCount = computed((): number => {
-  const r = getPomodoroHistory().find((d: PomodoroRecord) => d.date === todayStr)
+  const r = pomodoroHistoryRef.value.find((d: PomodoroRecord) => d.date === todayStr)
   return r?.count || 0
 })
 
 /** 今日专注分钟数 */
 const todayMinutes = computed((): number => {
-  const r = getPomodoroHistory().find((d: PomodoroRecord) => d.date === todayStr)
+  const r = pomodoroHistoryRef.value.find((d: PomodoroRecord) => d.date === todayStr)
   return r?.minutes || 0
 })
 
@@ -392,14 +552,14 @@ const weekTotalMinutes = computed((): number => {
   const monday = new Date(now)
   monday.setDate(now.getDate() - ((now.getDay() + 6) % 7))
   const mondayStr = monday.toISOString().slice(0, 10)
-  return getPomodoroHistory()
+  return pomodoroHistoryRef.value
     .filter((r: PomodoroRecord) => r.date >= mondayStr)
     .reduce((sum: number, r: PomodoroRecord) => sum + r.minutes, 0)
 })
 
 /** 最佳单日番茄数 */
 const bestDayCount = computed((): number => {
-  const history = getPomodoroHistory()
+  const history = pomodoroHistoryRef.value
   return history.length > 0 ? Math.max(...history.map((r: PomodoroRecord) => r.count)) : 0
 })
 
@@ -417,7 +577,7 @@ const weekData = computed((): WeekDayData[] => {
     const d = new Date(now)
     d.setDate(now.getDate() - ((now.getDay() + 6) % 7) + i)
     const dateStr = d.toISOString().slice(0, 10)
-    const record = getPomodoroHistory().find((r: PomodoroRecord) => r.date === dateStr)
+    const record = pomodoroHistoryRef.value.find((r: PomodoroRecord) => r.date === dateStr)
     return {
       label,
       count: record?.count || 0,

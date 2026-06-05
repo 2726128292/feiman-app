@@ -449,18 +449,29 @@ const noiseOptions = [
 /** 当前激活的白噪音类型 */
 const activeNoise = ref('none')
 
-/** 噪音音频上下文引用 */
-let noiseAudioContext: AudioContext | null = null
+/** 噪音音频上下文引用（单例复用） */
+const noiseCtxRef = ref<AudioContext | null>(null)
+const noiseSrcRef = ref<AudioBufferSourceNode | AudioNode | null>(null)
 let noiseGainNode: GainNode | null = null
+
+/**
+ * 获取或创建 AudioContext（单例模式，避免反复重建）
+ */
+function getOrCreateAudioContext(): AudioContext {
+  if (!noiseCtxRef.value || noiseCtxRef.value.state === 'closed') {
+    noiseCtxRef.value = new AudioContext()
+  }
+  return noiseCtxRef.value
+}
 
 /**
  * 使用 Web Audio API 生成白噪声/环境音
  * 无需外部音频文件，纯程序化生成
+ * 复用全局单例 AudioContext
  * @param type 噪音类型：rain / fire / cafe / wind
- * @returns 音频上下文、源节点和增益节点引用
  */
-function createNoise(type: string): { audioContext: AudioContext; sourceNode: AudioNode; gainNode: GainNode } {
-  const ctx = new AudioContext()
+function createNoise(type: string): void {
+  const ctx = getOrCreateAudioContext()
   const gain = ctx.createGain()
   // 设置音量为 30%，不会太吵
   gain.gain.value = 0.3
@@ -489,7 +500,9 @@ function createNoise(type: string): { audioContext: AudioContext; sourceNode: Au
     source.connect(filter)
     filter.connect(gain)
     source.start()
-    return { audioContext: ctx, sourceNode: source, gainNode: gain }
+    noiseSrcRef.value = source
+    noiseGainNode = gain
+    return
   }
 
   if (type === 'fire') {
@@ -509,7 +522,9 @@ function createNoise(type: string): { audioContext: AudioContext; sourceNode: Au
     source.connect(filter)
     filter.connect(gain)
     source.start()
-    return { audioContext: ctx, sourceNode: source, gainNode: gain }
+    noiseSrcRef.value = source
+    noiseGainNode = gain
+    return
   }
 
   if (type === 'cafe') {
@@ -530,11 +545,30 @@ function createNoise(type: string): { audioContext: AudioContext; sourceNode: Au
     source.connect(filter)
     filter.connect(gain)
     source.start()
-    return { audioContext: ctx, sourceNode: source, gainNode: gain }
+    noiseSrcRef.value = source
+    noiseGainNode = gain
+    return
   }
+}
 
-  // none（静音）：返回空增益节点
-  return { audioContext: ctx, sourceNode: ctx.createGain(), gainNode: gain }
+/**
+ * 停止当前播放的白噪音（只停止音源，不关闭 AudioContext）
+ */
+function stopNoise(): void {
+  try {
+    if (noiseSrcRef.value) {
+      const src = noiseSrcRef.value
+      if ('stop' in src && typeof src.stop === 'function') {
+        ;(src as AudioBufferSourceNode).stop()
+      }
+      src.disconnect()
+      noiseSrcRef.value = null
+    }
+  } catch {
+    // 已经停止或已断开连接，忽略错误
+  }
+  activeNoise.value = 'none'
+  noiseGainNode = null
 }
 
 /**
@@ -545,33 +579,15 @@ function toggleNoise(noiseId: string): void {
   // 如果点击的是当前已选中的，不做任何操作
   if (activeNoise.value === noiseId) return
 
-  // 先停止当前正在播放的噪音
+  // 先停止当前正在播放的噪音（只停音源，不复用 AudioContext）
   stopNoise()
 
   activeNoise.value = noiseId
 
   // 如果不是静音模式，创建并播放新噪音
   if (noiseId !== 'none') {
-    const result = createNoise(noiseId)
-    noiseGainNode = result.gainNode
-    // 存储全局引用以便后续停止
-    ;(window as any).__noiseCtx = result.audioContext
-    ;(window as any).__noiseSrc = result.sourceNode
+    createNoise(noiseId)
   }
-}
-
-/**
- * 停止当前播放的白噪音
- */
-function stopNoise(): void {
-  const ctx = (window as any).__noiseCtx
-  if (ctx) {
-    ctx.close().catch(() => {})
-    ;(window as any).__noiseCtx = null
-    ;(window as any).__noiseSrc = null
-  }
-  activeNoise.value = 'none'
-  noiseGainNode = null
 }
 
 // ====== 自动启动 ======
@@ -587,8 +603,13 @@ onUnmounted(() => {
   if (audioContext) {
     audioContext.close().catch(() => {})
   }
-  // 确保白噪音也被停止
+  // 停止白噪音音源
   stopNoise()
+  // 安全关闭噪音 AudioContext
+  if (noiseCtxRef.value && noiseCtxRef.value.state !== 'closed') {
+    noiseCtxRef.value.close().catch(() => {})
+    noiseCtxRef.value = null
+  }
 })
 </script>
 

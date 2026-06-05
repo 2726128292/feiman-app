@@ -208,7 +208,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref, onMounted } from 'vue'
+import { computed, ref, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { BookOpen, Brain, Target, Route, Network, TrendingUp, Zap, Sparkles, Search, X, ChevronRight, Flame } from 'lucide-vue-next'
 import Card from '@/components/common/Card.vue'
@@ -216,6 +216,22 @@ import Card from '@/components/common/Card.vue'
 import { useXPSystem } from '@/composables/useXPSystem'
 
 const router = useRouter()
+
+/** 缓存的讲解记录（用于图表和搜索，避免反复读 localStorage） */
+const cachedSessions = ref<any[]>([])
+
+/** 刷新缓存 */
+function refreshSessionCache(): void {
+  try {
+    const raw = localStorage.getItem('feiman_sessions')
+    cachedSessions.value = raw ? JSON.parse(raw) : []
+  } catch {
+    cachedSessions.value = []
+  }
+}
+
+// 初始加载
+refreshSessionCache()
 /** 从 localStorage 读取的真实仪表盘数据 */
 const dashboard = computed(() => {
   try {
@@ -368,23 +384,18 @@ function handleEntryClick(route: string) {
 /** 最近7天的讲解分数趋势 */
 const chartData = computed(() => {
   const data: number[] = []
+  const sessions = cachedSessions.value // 从缓存读取，不再每次调 localStorage
   for (let i = 6; i >= 0; i--) {
     const d = new Date(Date.now() - i * 86400000)
     const dateStr = d.toISOString().slice(0, 10)
     let maxScore = 0
 
-    try {
-      const sessionsRaw = localStorage.getItem('feiman_sessions')
-      if (sessionsRaw) {
-        const sessions = JSON.parse(sessionsRaw)
-        const daySessions = (Array.isArray(sessions) ? sessions : []).filter((s: any) =>
-          s.createdAt?.startsWith(dateStr) && s.score !== undefined
-        )
-        if (daySessions.length > 0) {
-          maxScore = Math.max(...daySessions.map((s: any) => s.score))
-        }
-      }
-    } catch {}
+    const daySessions = (Array.isArray(sessions) ? sessions : []).filter((s: any) =>
+      s.createdAt?.startsWith(dateStr) && s.score !== undefined
+    )
+    if (daySessions.length > 0) {
+      maxScore = Math.max(...daySessions.map((s: any) => s.score))
+    }
 
     data.push(maxScore || 0)
   }
@@ -452,76 +463,83 @@ const hasAnySearchResults = computed(() => {
   return r.topicResults.length > 0 || r.cardResults.length > 0 || r.sessionResults.length > 0
 })
 
+let searchTimer: ReturnType<typeof setTimeout> | null = null
+
 /**
  * 执行搜索 - 从 localStorage 读取数据并匹配
- * 最少2个字符触发搜索
+ * 最少2个字符触发搜索（200ms 防抖）
  */
 function onSearchInput(): void {
-  const query = searchQuery.value.trim().toLowerCase()
+  if (searchTimer !== null) clearTimeout(searchTimer)
+  searchTimer = setTimeout(() => {
+    const query = searchQuery.value.trim().toLowerCase()
 
-  // 少于2个字符不触发搜索，清空结果
-  if (query.length < 2) {
-    searchResults.value = { topicResults: [], cardResults: [], sessionResults: [] }
-    return
-  }
-
-  // 从 localStorage 读取数据
-  const topicsData = localStorage.getItem('feiman_topics')
-  const cardsData = localStorage.getItem('feiman_cards') || localStorage.getItem('feiman_review_cards')
-  const sessionsData = localStorage.getItem('feiman_sessions')
-
-  // 搜索主题（按标题和tags）
-  let topicResults: Array<{ id: string; title: string }> = []
-  if (topicsData) {
-    try {
-      const topics = JSON.parse(topicsData)
-      topicResults = (Array.isArray(topics) ? topics : []).filter((t: any) => {
-        const titleMatch = t.title?.toLowerCase().includes(query)
-        const tagsMatch = Array.isArray(t.tags) && t.tags.some((tag: string) =>
-          tag.toLowerCase().includes(query)
-        )
-        return titleMatch || tagsMatch
-      }).map((t: any) => ({ id: t.id, title: t.title }))
-    } catch {
-      // JSON 解析失败时忽略
+    // 少于2个字符不触发搜索，清空结果
+    if (query.length < 2) {
+      searchResults.value = { topicResults: [], cardResults: [], sessionResults: [] }
+      searchTimer = null
+      return
     }
-  }
 
-  // 搜索闪卡（按问题和答案）
-  let cardResults: Array<{ question?: string; answer?: string }> = []
-  if (cardsData) {
-    try {
-      const cards = JSON.parse(cardsData)
-      cardResults = (Array.isArray(cards) ? cards : []).filter((c: any) => {
-        const questionMatch = c.question?.toLowerCase().includes(query)
-        const answerMatch = c.answer?.toLowerCase().includes(query)
-        return questionMatch || answerMatch
-      }).slice(0, 3)
-    } catch {
-      // JSON 解析失败时忽略
+    // 从 localStorage 读取数据
+    const topicsData = localStorage.getItem('feiman_topics')
+    const cardsData = localStorage.getItem('feiman_cards') || localStorage.getItem('feiman_review_cards')
+    const sessionsData = localStorage.getItem('feiman_sessions')
+
+    // 搜索主题（按标题和tags）
+    let topicResults: Array<{ id: string; title: string }> = []
+    if (topicsData) {
+      try {
+        const topics = JSON.parse(topicsData)
+        topicResults = (Array.isArray(topics) ? topics : []).filter((t: any) => {
+          const titleMatch = t.title?.toLowerCase().includes(query)
+          const tagsMatch = Array.isArray(t.tags) && t.tags.some((tag: string) =>
+            tag.toLowerCase().includes(query)
+          )
+          return titleMatch || tagsMatch
+        }).map((t: any) => ({ id: t.id, title: t.title }))
+      } catch {
+        // JSON 解析失败时忽略
+      }
     }
-  }
 
-  // 搜索讲解记录（按 topicId 和 content）
-  let sessionResults: Array<{ id: string; content?: string; topicId?: string }> = []
-  if (sessionsData) {
-    try {
-      const sessions = JSON.parse(sessionsData)
-      sessionResults = (Array.isArray(sessions) ? sessions : []).filter((s: any) => {
-        const topicIdMatch = s.topicId?.toLowerCase().includes(query)
-        const contentMatch = s.content?.toLowerCase().includes(query)
-        return topicIdMatch || contentMatch
-      }).slice(0, 3).map((s: any) => ({
-        id: s.id,
-        content: s.content,
-        topicId: s.topicId
-      }))
-    } catch {
-      // JSON 解析失败时忽略
+    // 搜索闪卡（按问题和答案）
+    let cardResults: Array<{ question?: string; answer?: string }> = []
+    if (cardsData) {
+      try {
+        const cards = JSON.parse(cardsData)
+        cardResults = (Array.isArray(cards) ? cards : []).filter((c: any) => {
+          const questionMatch = c.question?.toLowerCase().includes(query)
+          const answerMatch = c.answer?.toLowerCase().includes(query)
+          return questionMatch || answerMatch
+        }).slice(0, 3)
+      } catch {
+        // JSON 解析失败时忽略
+      }
     }
-  }
 
-  searchResults.value = { topicResults, cardResults, sessionResults }
+    // 搜索讲解记录（按 topicId 和 content）
+    let sessionResults: Array<{ id: string; content?: string; topicId?: string }> = []
+    if (sessionsData) {
+      try {
+        const sessions = JSON.parse(sessionsData)
+        sessionResults = (Array.isArray(sessions) ? sessions : []).filter((s: any) => {
+          const topicIdMatch = s.topicId?.toLowerCase().includes(query)
+          const contentMatch = s.content?.toLowerCase().includes(query)
+          return topicIdMatch || contentMatch
+        }).slice(0, 3).map((s: any) => ({
+          id: s.id,
+          content: s.content,
+          topicId: s.topicId
+        }))
+      } catch {
+        // JSON 解析失败时忽略
+      }
+    }
+
+    searchResults.value = { topicResults, cardResults, sessionResults }
+    searchTimer = null
+  }, 200)
 }
 
 /** 清空搜索 */
@@ -546,9 +564,21 @@ function navigateToTopic(topicId: string): void {
 
 /** 监听来自 App.vue 的 focus-search 自定义事件，聚焦搜索框 */
 onMounted(() => {
-  window.addEventListener('focus-search', () => {
+  const handleFocusSearch = () => {
     const el = document.querySelector('.search-input-main') as HTMLInputElement
     el?.focus()
-  })
+  }
+  window.addEventListener('focus-search', handleFocusSearch)
+
+  // 存储引用以便清理
+  ;(window as any).__focusSearchHandler = handleFocusSearch
+})
+
+onUnmounted(() => {
+  const handler = (window as any).__focusSearchHandler
+  if (handler) {
+    window.removeEventListener('focus-search', handler)
+    delete (window as any).__focusSearchHandler
+  }
 })
 </script>

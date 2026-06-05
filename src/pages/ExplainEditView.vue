@@ -39,15 +39,43 @@
       <div class="bg-white rounded-2xl p-5 shadow-sm">
         <div class="flex items-center gap-2 mb-3">
           <span class="text-xs font-semibold text-slate-500">当前任务</span>
-          <span class="px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-blue-50 text-blue-600">限时 8 分钟</span>
+          <span v-if="currentStep === 2" class="px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-blue-50 text-blue-600">限时 8 分钟</span>
         </div>
-        <p class="text-lg font-bold text-slate-900 leading-relaxed">
+        <!-- 步骤1：选题 -->
+        <p v-if="currentStep === 1" class="text-lg font-bold text-slate-900 leading-relaxed">请选择一个你要讲解的主题</p>
+        <!-- 步骤2：讲解 -->
+        <p v-else-if="currentStep === 2" class="text-lg font-bold text-slate-900 leading-relaxed">
           请用生活类比解释：什么是{{ selectedTopic }}？
         </p>
+        <!-- 步骤3：录音 -->
+        <p v-else-if="currentStep === 3" class="text-lg font-bold text-slate-900 leading-relaxed">录制你的语音讲解</p>
+        <!-- 步骤4：诊断 -->
+        <p v-else-if="currentStep === 4" class="text-lg font-bold text-slate-900 leading-relaxed">查看诊断结果与改进建议</p>
+        <!-- 步骤5：复习 -->
+        <p v-else-if="currentStep === 5" class="text-lg font-bold text-slate-900 leading-relaxed">完成！开始间隔复习</p>
+      </div>
+
+      <!-- 步骤导航按钮 -->
+      <div class="flex gap-3">
+        <button
+          v-if="currentStep > 1 && currentStep < 5"
+          class="flex-1 py-2.5 rounded-full border-2 border-slate-200 text-slate-600 text-sm font-medium active:bg-slate-50 transition-colors"
+          @click="goToPrevStep"
+        >上一步</button>
+        <button
+          v-if="currentStep === 3"
+          class="flex-1 py-2.5 rounded-full bg-[#4F6EF7] text-white text-sm font-semibold shadow-md shadow-blue-500/20 active:scale-[0.98] transition-transform"
+          @click="goToNextStep"
+        >去录音</button>
+        <button
+          v-else-if="currentStep < 2 || (currentStep === 2 && editorContent.trim())"
+          class="flex-1 py-2.5 rounded-full bg-[#4F6EF7] text-white text-sm font-semibold shadow-md shadow-blue-500/20 active:scale-[0.98] transition-transform"
+          @click="goToNextStep"
+        >{{ currentStep === 1 ? '开始讲解' : '提交评分' }}</button>
       </div>
 
       <!-- 主题选择器 -->
-      <div class="bg-white rounded-2xl p-5 shadow-sm">
+      <div class="bg-white rounded-2xl p-5 shadow-sm" :class="currentStep === 1 ? 'ring-2 ring-[#4F6EF7] ring-offset-2' : ''">
         <label class="block text-sm font-semibold text-slate-700 mb-3">选择讲解主题</label>
         <!-- 主题 Pills -->
         <div class="flex flex-wrap gap-2 mb-3">
@@ -73,8 +101,8 @@
         />
       </div>
 
-      <!-- 编辑器区域 -->
-      <div class="bg-white rounded-2xl p-5 shadow-sm">
+      <!-- 编辑器区域 (步骤2+可见) -->
+      <div v-if="currentStep >= 2" class="bg-white rounded-2xl p-5 shadow-sm">
         <label class="block text-sm font-semibold text-slate-700 mb-2.5">你的讲解</label>
 
         <!-- Markdown 预览模式 -->
@@ -115,8 +143,8 @@
         </div>
       </div>
 
-      <!-- ====== 评分结果面板 (在当前页面展示，不跳转) ====== -->
-      <div v-if="scoreResult" class="space-y-4 animate-fade-up">
+      <!-- ====== 评分结果面板 (步骤4时显示) ====== -->
+      <div v-if="scoreResult && currentStep === 4" class="space-y-4 animate-fade-up">
 
         <!-- 综合评分卡片 -->
         <div class="bg-white rounded-2xl p-5 shadow-sm">
@@ -224,9 +252,9 @@
         </button>
       </div>
 
-      <!-- 提交讲解按钮 (未评分时显示) -->
+      <!-- 提交讲解按钮 (步骤2且未评分时显示) -->
       <button
-        v-if="!scoreResult"
+        v-if="!scoreResult && currentStep === 2"
         class="w-full py-3.5 rounded-full bg-[#4F6EF7] text-white text-base font-semibold shadow-lg shadow-blue-500/25 active:scale-[0.98] transition-transform duration-150 flex items-center justify-center gap-2 disabled:opacity-50 disabled:active:scale-100"
         :disabled="isScoring || !editorContent.trim()"
         @click="handleSubmitScore"
@@ -237,6 +265,50 @@
         </svg>
         {{ isScoring ? '正在分析...' : '提交讲解并评分' }}
       </button>
+
+      <!-- 步骤3：录音卡片 -->
+      <div v-if="currentStep === 3" class="bg-white rounded-2xl p-5 shadow-sm space-y-4">
+        <div class="text-center py-6">
+          <div class="w-16 h-16 mx-auto mb-4 rounded-full bg-red-50 flex items-center justify-center">
+            <svg class="w-8 h-8 text-red-500" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3z"/>
+              <path d="M17 11c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z"/>
+            </svg>
+          </div>
+          <p class="text-base font-semibold text-slate-900 mb-1">录制你的语音讲解</p>
+          <p class="text-sm text-slate-500 mb-5">用你的话把「{{ selectedTopic }}」讲出来</p>
+          <button
+            class="px-8 py-3 rounded-full bg-[#4F6EF7] text-white text-sm font-semibold shadow-lg shadow-blue-500/25 active:scale-[0.98] transition-transform"
+            @click="router.push('/explain/new/voice')"
+          >开始录音</button>
+        </div>
+      </div>
+
+      <!-- 步骤5：复习面板 -->
+      <div v-if="currentStep === 5" class="space-y-4 animate-fade-up">
+        <div class="bg-gradient-to-br from-emerald-50 to-teal-50 rounded-2xl p-6 text-center">
+          <div class="text-4xl mb-3">🎉</div>
+          <h3 class="text-xl font-bold text-slate-900 mb-2">恭喜完成讲解！</h3>
+          <p class="text-sm text-slate-600 mb-4">主题：{{ selectedTopic }}</p>
+          <div class="flex items-end justify-center gap-2 mb-4">
+            <span v-if="scoreResult" class="text-5xl font-black" :class="scoreTextColor">{{ scoreResult.score }}</span>
+            <span v-if="scoreResult" class="text-lg text-slate-400 mb-1">/ 100</span>
+          </div>
+          <div class="bg-white/70 rounded-xl px-4 py-3 mb-4">
+            <p class="text-sm text-slate-600">💡 建议间隔 <strong class="text-emerald-600">1天后</strong> 复习此概念</p>
+          </div>
+          <div class="space-y-3">
+            <button
+              class="w-full py-3 rounded-full bg-emerald-500 text-white text-sm font-semibold shadow-md shadow-emerald-500/20 active:scale-[0.98] transition-transform"
+              @click="router.push('/flashcards')"
+            >去复习闪卡</button>
+            <button
+              class="w-full py-3 rounded-full border-2 border-slate-200 text-slate-600 text-sm font-medium active:bg-slate-50 transition-colors"
+              @click="resetToStep1"
+            >再讲一次</button>
+          </div>
+        </div>
+      </div>
 
     </div>
   </div>
@@ -263,7 +335,7 @@ const { shareExplanation } = useShare()
 // XP 经验值系统
 const xpSystem = useXPSystem()
 
-const currentStep = ref(2)
+const currentStep = ref(1)
 const totalSteps = ref(5)
 const stepLabels = ['选题', '讲解', '录音', '诊断', '复习']
 
@@ -307,11 +379,13 @@ const customInput = ref('')
 function selectPill(topic: string) {
   selectedTopic.value = topic
   customInput.value = ''
+  if (currentStep.value === 1) currentStep.value = 2
 }
 
 function onCustomInput() {
   if (customInput.value.trim()) {
     selectedTopic.value = customInput.value.trim()
+    if (currentStep.value === 1) currentStep.value = 2
   }
 }
 
@@ -406,6 +480,7 @@ function handleTool(action: string) {
       showToast('图片插入功能：可粘贴图片URL或使用剪贴板', 'info')
       break
     case 'record':
+      currentStep.value = 3
       router.push('/explain/new/voice')
       break
     case 'ai': {
@@ -616,6 +691,7 @@ async function handleSubmitScore() {
   triggerHaptic('medium') // 评分提交触觉反馈
 
   isScoring.value = false
+  currentStep.value = 4
 }
 
 function continueEditing() {
@@ -744,9 +820,43 @@ function saveSession() {
     if (xpResult.level > prevLevel) {
       showToast(`🎉 升级了！当前 Lv.${xpResult.level}`, 'success')
     }
+    currentStep.value = 5
   } catch {
     showToast('保存失败，请重试', 'error')
   }
+}
+
+// ====== 步骤导航 ======
+function goToPrevStep() {
+  if (currentStep.value > 1) {
+    // 从诊断回到编辑
+    if (currentStep.value === 4) {
+      scoreResult.value = null
+      currentStep.value = 2
+    } else {
+      currentStep.value--
+    }
+  }
+}
+
+function goToNextStep() {
+  if (currentStep.value < totalSteps.value) {
+    if (currentStep.value === 2) {
+      handleSubmitScore()
+    } else if (currentStep.value === 3) {
+      router.push('/explain/new/voice')
+    } else {
+      currentStep.value++
+    }
+  }
+}
+
+function resetToStep1() {
+  currentStep.value = 1
+  editorContent.value = ''
+  scoreResult.value = null
+  customInput.value = ''
+  selectedTopic.value = '递归'
 }
 </script>
 

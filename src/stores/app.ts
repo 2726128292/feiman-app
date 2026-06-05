@@ -2,7 +2,7 @@ import { ref } from 'vue'
 import { useStorage } from '@/composables/useStorage'
 
 export const useAppStore = () => {
-  const hasSeenSplash = useStorage<boolean>('feiman_has_seen_splash', false)
+  const { data: hasSeenSplash } = useStorage<boolean>('feiman_has_seen_splash', false)
 
   const currentTab = ref(0)
 

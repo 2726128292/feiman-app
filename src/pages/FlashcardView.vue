@@ -595,6 +595,33 @@ interface CardGroup {
 // 所有卡片（mock + 用户上传的）
 const allCards = ref<ReviewCard[]>([...mockCards])
 
+// ====== 脏标记批量写入机制（避免每次评级都完整读写 localStorage）======
+
+/** 脏标记：数据是否被修改但尚未持久化 */
+let isDirty = false
+/** 防抖写入定时器 */
+let saveTimer: ReturnType<typeof setTimeout> | null = null
+
+/** 延迟批量写入（防抖500ms） */
+function scheduleSave(): void {
+  isDirty = true
+  if (saveTimer !== null) clearTimeout(saveTimer)
+  saveTimer = setTimeout(() => {
+    flushCardsToStorage()
+    saveTimer = null
+  }, 500)
+}
+
+/** 立即将内存数据写入 localStorage */
+function flushCardsToStorage(): void {
+  try {
+    localStorage.setItem('feiman_review_cards', JSON.stringify(allCards.value))
+    isDirty = false
+  } catch {
+    // 写入失败静默处理
+  }
+}
+
 // ==================== 全局撤销/重做（功能2） ====================
 
 const { undo, redo, canUndo, canRedo, execute } = useUndoRedo(allCards.value)
@@ -683,16 +710,8 @@ function saveEditCard(cardId: string): void {
     card.question = editCardForm.question.trim()
     card.answer = editCardForm.answer.trim() || '待补充答案'
 
-    // 同步到 localStorage
-    try {
-      const raw = localStorage.getItem('feiman_review_cards') || localStorage.getItem('feiman_cards') || '[]'
-      const stored = JSON.parse(raw)
-      const idx = stored.findIndex((c: any) => c.id === cardId)
-      if (idx !== -1) {
-        stored[idx] = { ...stored[idx], question: card.question, answer: card.answer }
-        localStorage.setItem('feiman_review_cards', JSON.stringify(stored))
-      }
-    } catch { /* ignore */ }
+    // 延迟批量持久化
+    scheduleSave()
 
     showToast('闪卡已更新', 'success')
   }
@@ -722,20 +741,15 @@ function executeDeleteCard(): void {
   if (idx !== -1) {
     const removed = allCards.value.splice(idx, 1)[0]
 
-    // 同步到 localStorage
-    try {
-      const raw = localStorage.getItem('feiman_review_cards') || localStorage.getItem('feiman_cards') || '[]'
-      const stored = JSON.parse(raw)
-      const filtered = stored.filter((c: any) => c.id !== cardId)
-      localStorage.setItem('feiman_review_cards', JSON.stringify(filtered))
+    // 立即持久化（删除操作需要即时反馈）
+    flushCardsToStorage()
 
-      // 同时从错题本中移除
-      const wrongRaw = localStorage.getItem('feiman_wrong_book')
-      if (wrongRaw) {
-        const wrong = JSON.parse(wrongRaw)
-        localStorage.setItem('feiman_wrong_book', JSON.stringify(wrong.filter((e: any) => e.cardId !== cardId)))
-      }
-    } catch { /* ignore */ }
+    // 同时从错题本中移除
+    const wrongIdx = wrongBookEntries.value.findIndex(e => e.cardId === cardId)
+    if (wrongIdx !== -1) {
+      wrongBookEntries.value.splice(wrongIdx, 1)
+      saveWrongBook()
+    }
 
     showToast(`已删除「${removed.question}」`, 'info')
   }
@@ -910,18 +924,8 @@ function rateCard(quality: 'forget' | 'hard' | 'easy') {
     card.dueAt = card.nextReview
   }
 
-  // 持久化评级结果到 localStorage
-  try {
-    const raw = localStorage.getItem('feiman_review_cards') || localStorage.getItem('feiman_cards') || '[]'
-    const allStored = JSON.parse(raw)
-    const idx = allStored.findIndex((c: any) => c.id === card.id)
-    if (idx !== -1) {
-      allStored[idx] = { ...allStored[idx], ...card }
-      localStorage.setItem('feiman_review_cards', JSON.stringify(allStored))
-    }
-  } catch {
-    // 持久化失败不影响流程继续
-  }
+  // 延迟批量持久化（防抖500ms，避免每次评级都完整读写 localStorage）
+  scheduleSave()
 
   reviewedCount.value++
   // 复习闪卡获得 XP
@@ -1002,6 +1006,11 @@ onMounted(() => {
 onUnmounted(() => {
   // 清理撤销/重做快捷键监听
   window.removeEventListener('keydown', handleGlobalKeydown)
+  // 如果有未保存的修改，立即写入
+  if (isDirty && saveTimer !== null) {
+    clearTimeout(saveTimer)
+    flushCardsToStorage()
+  }
 })
 </script>
 

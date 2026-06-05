@@ -198,7 +198,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, onActivated, ref } from 'vue'
 import { TrendingUp, TrendingDown, Lightbulb, FileText, Download as DownloadIcon, X, Mic, Timer } from 'lucide-vue-next'
 import type { UserProfile, StudyTopic, FeynmanSession, ReviewCard, Achievement } from '@/types'
 import { exportPdfReport } from '@/composables/usePdfExport'
@@ -213,7 +213,7 @@ interface WrongBookItem {
   addedAt: string
 }
 
-// ====== 从 localStorage 读取数据 ======
+// ====== 从 localStorage 读取数据（响应式） ======
 function safeGet<T>(key: string): T | null {
   try {
     const raw = localStorage.getItem(key)
@@ -224,16 +224,41 @@ function safeGet<T>(key: string): T | null {
   }
 }
 
-const userProfile = safeGet<UserProfile>('feiman_user_profile')
-const topics = safeGet<StudyTopic[]>('feiman_topics') ?? []
-const sessions = safeGet<FeynmanSession[]>('feiman_sessions') ?? []
-const cards = safeGet<ReviewCard[]>('feiman_cards') ?? []
-const achievements = safeGet<Achievement[]>('feiman_achievements') ?? []
-const wrongBook = safeGet<WrongBookItem[]>('feiman_wrong_book') ?? []
+const userProfile = ref<any>(null)
+const topics = ref<StudyTopic[]>([])
+const sessions = ref<FeynmanSession[]>([])
+const cards = ref<ReviewCard[]>([])
+const achievements = ref<Achievement[]>([])
+const wrongBook = ref<WrongBookItem[]>([])
+const pomodoroHistoryForAnalytics = ref<any[]>([])
+
+/** 从 localStorage 刷新所有数据 */
+function refreshAllData(): void {
+  userProfile.value = safeGet<any>('feiman_user_profile')
+  topics.value = safeGet<StudyTopic[]>('feiman_topics') ?? []
+  sessions.value = safeGet<FeynmanSession[]>('feiman_sessions') ?? []
+  cards.value = safeGet<ReviewCard[]>('feiman_cards') ?? []
+  achievements.value = safeGet<Achievement[]>('feiman_achievements') ?? []
+  wrongBook.value = safeGet<WrongBookItem[]>('feiman_wrong_book') ?? []
+  try {
+    const raw = localStorage.getItem('feiman_pomodoro_history')
+    pomodoroHistoryForAnalytics.value = raw ? JSON.parse(raw) : []
+  } catch {
+    pomodoroHistoryForAnalytics.value = []
+  }
+}
+
+// 初始加载
+refreshAllData()
+
+// 使用 keep-alive 时重新激活也刷新
+onActivated(() => {
+  refreshAllData()
+})
 
 // ====== 判断是否为空 ======
 const isEmpty = computed(() => {
-  return sessions.length === 0 && cards.length === 0 && topics.length === 0
+  return sessions.value.length === 0 && cards.value.length === 0 && topics.value.length === 0
 })
 
 // ====== 工具函数：日期相关 ======
@@ -270,12 +295,12 @@ function isLastWeek(dateStr: string): boolean {
 
 /** 掌握率：主题平均进度 或 会话平均分数 */
 function calcMasteryRate(): number {
-  if (topics.length > 0) {
-    const totalProgress = topics.reduce((sum, t) => sum + (t.progress || 0), 0)
-    return Math.round(totalProgress / topics.length)
+  if (topics.value.length > 0) {
+    const totalProgress = topics.value.reduce((sum, t) => sum + (t.progress || 0), 0)
+    return Math.round(totalProgress / topics.value.length)
   }
-  if (sessions.length > 0) {
-    const scoredSessions = sessions.filter(s => s.score != null && s.score > 0)
+  if (sessions.value.length > 0) {
+    const scoredSessions = sessions.value.filter(s => s.score != null && s.score > 0)
     if (scoredSessions.length > 0) {
       const avgScore = scoredSessions.reduce((sum, s) => sum + s.score!, 0) / scoredSessions.length
       return Math.round(avgScore)
@@ -286,8 +311,8 @@ function calcMasteryRate(): number {
 
 /** 掌握率趋势：本周 vs 上周 */
 function calcMasteryTrend(): number {
-  const thisWeekScores = sessions.filter(s => isThisWeek(s.createdAt))
-  const lastWeekScores = sessions.filter(s => isLastWeek(s.createdAt))
+  const thisWeekScores = sessions.value.filter(s => isThisWeek(s.createdAt))
+  const lastWeekScores = sessions.value.filter(s => isLastWeek(s.createdAt))
 
   if (thisWeekScores.length === 0 && lastWeekScores.length === 0) return 0
   if (lastWeekScores.length === 0) return thisWeekScores.length > 0 ? 15 : 0
@@ -300,10 +325,10 @@ function calcMasteryTrend(): number {
 
 /** 遗忘风险：interval < 3 且 easeFactor < 2.4 的卡片比例 */
 function calcForgetRisk(): { level: '低' | '中' | '高'; trend: number } {
-  if (cards.length === 0) return { level: '低', trend: 0 }
+  if (cards.value.length === 0) return { level: '低', trend: 0 }
 
-  const riskyCards = cards.filter(c => c.interval < 3 && c.easeFactor < 2.4)
-  const ratio = riskyCards.length / cards.length
+  const riskyCards = cards.value.filter(c => c.interval < 3 && c.easeFactor < 2.4)
+  const ratio = riskyCards.length / cards.value.length
 
   let level: '低' | '中' | '高' = '低'
   if (ratio > 0.25) level = '高'
@@ -323,7 +348,7 @@ function calcForgetRisk(): { level: '低' | '中' | '高'; trend: number } {
 
 /** 讲解清晰度：会话平均分 */
 function calcClarityScore(): { score: number; trend: number } {
-  const scoredSessions = sessions.filter(s => s.score != null && s.score > 0)
+  const scoredSessions = sessions.value.filter(s => s.score != null && s.score > 0)
   if (scoredSessions.length === 0) return { score: 0, trend: 0 }
 
   const totalScore = scoredSessions.reduce((s, x) => s + x.score!, 0)
@@ -346,14 +371,14 @@ function calcClarityScore(): { score: number; trend: number } {
 
 /** 薄弱点数量：所有会话的 gaps 数 + 错题本数 */
 function calcGapCount(): { count: number; trend: number } {
-  const sessionGaps = sessions.reduce((total, s) => total + (s.gaps?.length || 0), 0)
-  const totalCount = sessionGaps + wrongBook.length
+  const sessionGaps = sessions.value.reduce((total, s) => total + (s.gaps?.length || 0), 0)
+  const totalCount = sessionGaps + wrongBook.value.length
 
   // 趋势：本周新增 gaps vs 上周
-  const thisWeekGaps = sessions
+  const thisWeekGaps = sessions.value
     .filter(s => isThisWeek(s.createdAt))
     .reduce((t, s) => t + (s.gaps?.length || 0), 0)
-  const lastWeekGaps = sessions
+  const lastWeekGaps = sessions.value
     .filter(s => isLastWeek(s.createdAt))
     .reduce((t, s) => t + (s.gaps?.length || 0), 0)
 
@@ -364,36 +389,36 @@ function calcGapCount(): { count: number; trend: number } {
   return { count: totalCount, trend }
 }
 
-// ====== 指标数据 ======
-const masteryRate = calcMasteryRate()
-const forgetRisk = calcForgetRisk()
-const clarityData = calcClarityScore()
-const gapData = calcGapCount()
+// ====== 指标数据（响应式） ======
+const masteryRate = computed(() => calcMasteryRate())
+const forgetRisk = computed(() => calcForgetRisk())
+const clarityData = computed(() => calcClarityScore())
+const gapData = computed(() => calcGapCount())
 
 const metrics = computed(() => [
   {
     label: '掌握率',
-    value: `${masteryRate}%`,
+    value: `${masteryRate.value}%`,
     valueClass: 'text-[#4F6EF7]',
     trend: calcMasteryTrend(),
   },
   {
     label: '遗忘风险',
-    value: forgetRisk.level,
-    valueClass: forgetRisk.level === '高' ? 'text-red-500' : forgetRisk.level === '中' ? 'text-amber-500' : 'text-emerald-600',
-    trend: forgetRisk.trend,
+    value: forgetRisk.value.level,
+    valueClass: forgetRisk.value.level === '高' ? 'text-red-500' : forgetRisk.value.level === '中' ? 'text-amber-500' : 'text-emerald-600',
+    trend: forgetRisk.value.trend,
   },
   {
     label: '讲解清晰',
-    value: String(clarityData.score),
-    valueClass: clarityData.score >= 80 ? 'text-emerald-600' : clarityData.score >= 60 ? 'text-amber-500' : 'text-red-500',
-    trend: clarityData.trend,
+    value: String(clarityData.value.score),
+    valueClass: clarityData.value.score >= 80 ? 'text-emerald-600' : clarityData.value.score >= 60 ? 'text-amber-500' : 'text-red-500',
+    trend: clarityData.value.trend,
   },
   {
     label: '薄弱点',
-    value: String(gapData.count),
-    valueClass: gapData.count > 20 ? 'text-red-500' : gapData.count > 10 ? 'text-amber-500' : 'text-emerald-600',
-    trend: gapData.trend,
+    value: String(gapData.value.count),
+    valueClass: gapData.value.count > 20 ? 'text-red-500' : gapData.value.count > 10 ? 'text-amber-500' : 'text-emerald-600',
+    trend: gapData.value.trend,
   },
 ])
 
@@ -423,13 +448,13 @@ function buildActivityMap(): Map<string, number> {
   const map = new Map<string, number>()
 
   // 收集所有会话日期
-  for (const s of sessions) {
+  for (const s of sessions.value) {
     const d = new Date(s.createdAt).toISOString().split('T')[0]
     map.set(d, (map.get(d) || 0) + 1)
   }
 
   // 收集所有卡片复习日期
-  for (const c of cards) {
+  for (const c of cards.value) {
     if (c.lastReviewAt) {
       const d = new Date(c.lastReviewAt).toISOString().split('T')[0]
       map.set(d, (map.get(d) || 0) + 1)
@@ -437,7 +462,7 @@ function buildActivityMap(): Map<string, number> {
   }
 
   // 收集错题本添加日期
-  for (const w of wrongBook) {
+  for (const w of wrongBook.value) {
     if (w.addedAt) {
       const d = new Date(w.addedAt).toISOString().split('T')[0]
       map.set(d, (map.get(d) || 0) + 1)
@@ -445,7 +470,7 @@ function buildActivityMap(): Map<string, number> {
   }
 
   // 收集成就解锁日期
-  for (const a of achievements) {
+  for (const a of achievements.value) {
     if (a.unlockedAt) {
       const d = new Date(a.unlockedAt).toISOString().split('T')[0]
       map.set(d, (map.get(d) || 0) + 1)
@@ -525,41 +550,41 @@ const suggestionText = computed(() => {
   const suggestions: string[] = []
 
   // 错题本较多
-  if (wrongBook.length >= 5) {
-    suggestions.push(`你有 ${wrongBook.length} 道错题待攻克，建议优先集中复习薄弱知识点。`)
+  if (wrongBook.value.length >= 5) {
+    suggestions.push(`你有 ${wrongBook.value.length} 道错题待攻克，建议优先集中复习薄弱知识点。`)
   }
 
   // 近期无会话
-  const recentDays = sessions.filter(s => {
+  const recentDays = sessions.value.filter(s => {
     const daysDiff = (Date.now() - new Date(s.createdAt).getTime()) / (1000 * 60 * 60 * 24)
     return daysDiff <= 3
   })
-  if (sessions.length > 0 && recentDays.length === 0) {
+  if (sessions.value.length > 0 && recentDays.length === 0) {
     suggestions.push('已经 3 天没有进行讲解了，建议每天花 10 分钟用费曼法巩固一个概念。')
   }
 
   // 连续打卡提醒
-  if (userProfile?.streakDays && userProfile.streakDays >= 3) {
-    suggestions.push(`已连续打卡 ${userProfile.streakDays} 天，太棒了！保持下去，习惯正在养成。`)
+  if (userProfile.value?.streakDays && userProfile.value.streakDays >= 3) {
+    suggestions.push(`已连续打卡 ${userProfile.value.streakDays} 天，太棒了！保持下去，习惯正在养成。`)
   }
 
   // 分数较高
-  if (clarityData.score >= 85 && sessions.length >= 3) {
+  if (clarityData.value.score >= 85 && sessions.value.length >= 3) {
     suggestions.push('你的讲解清晰度很高！可以尝试更有挑战性的主题，或尝试教给他人。')
   }
 
   // 遗忘风险高
-  if (forgetRisk.level === '高') {
+  if (forgetRisk.value.level === '高') {
     suggestions.push('部分卡片即将进入遗忘期，建议增加复习频率。')
   }
 
   // 数据太少
-  if (sessions.length > 0 && sessions.length < 3) {
+  if (sessions.value.length > 0 && sessions.value.length < 3) {
     suggestions.push('积累更多讲解记录后，将为你提供更精准的分析建议。继续加油！')
   }
 
   if (suggestions.length === 0) {
-    if (sessions.length === 0) {
+    if (sessions.value.length === 0) {
       return '完成第一次讲解或闪卡复习后，这里将为你提供个性化建议。'
     }
     return '坚持使用费曼学习法，每次讲解都会让理解更深入一步。'
@@ -583,12 +608,10 @@ const reportData = computed(() => {
   // 讲解次数与总分
   let totalSessions = 0
   let totalScore = 0
-  try {
-    const sessionData = JSON.parse(localStorage.getItem('feiman_sessions') || '[]')
-    const recent = sessionData.filter((s: any) => s.createdAt >= cutoffISO)
-    totalSessions = recent.length
-    totalScore = recent.reduce((sum: number, s: any) => sum + (s.score || 0), 0)
-  } catch { /* 静默 */ }
+  const sessionData = sessions.value
+  const recent = sessionData.filter((s: any) => s.createdAt >= cutoffISO)
+  totalSessions = recent.length
+  totalScore = recent.reduce((sum: number, s: any) => sum + (s.score || 0), 0)
 
   // 闪卡复习数（从 daily_stats 获取累计值）
   let cardsReviewed = 0
@@ -597,18 +620,14 @@ const reportData = computed(() => {
     cardsReviewed = stats.reviewCount || 0
   } catch { /* 静默 */ }
 
-  // 活跃天数（基于 session 的日期去重）
+  // 活跃天数（基于 session 的日期去重，复用上面的 sessionData）
   let activeDays = 0
-  try {
-    const sessionData = JSON.parse(localStorage.getItem('feiman_sessions') || '[]')
-    const dates = new Set(
-      sessionData
-        .filter((s: any) => s.createdAt >= cutoffISO)
-        .map((s: any) => s.createdAt?.slice(0, 10))
-        .filter(Boolean)
-    )
-    activeDays = dates.size
-  } catch { /* 静默 */ }
+  const dates = new Set(
+    recent
+      .map((s: any) => s.createdAt?.slice(0, 10))
+      .filter(Boolean)
+  )
+  activeDays = dates.size
 
   return {
     totalSessions,
@@ -675,34 +694,28 @@ function selectDate(dateStr: string): void {
   const activities: Array<{ icon: any; iconBg: string; iconColor: string; title: string; detail: string }> = []
 
   // 查找当天的讲解记录
-  try {
-    const sessions = JSON.parse(localStorage.getItem('feiman_sessions') || '[]')
-    const daySessions = sessions.filter((s: any) => s.createdAt?.startsWith(dateStr))
-    daySessions.forEach((s: any) => {
-      activities.push({
-        icon: Mic,
-        iconBg: 'bg-purple-50',
-        iconColor: 'text-purple-500',
-        title: `费曼讲解`,
-        detail: `${s.topicId || '未知主题'} · ${s.score || '?'}分`,
-      })
+  const daySessions = sessions.value.filter((s: any) => s.createdAt?.startsWith(dateStr))
+  daySessions.forEach((s: any) => {
+    activities.push({
+      icon: Mic,
+      iconBg: 'bg-purple-50',
+      iconColor: 'text-purple-500',
+      title: `费曼讲解`,
+      detail: `${s.topicId || '未知主题'} · ${s.score || '?'}分`,
     })
-  } catch { /* 解析失败时忽略 */ }
+  })
 
   // 查找当天的番茄钟记录
-  try {
-    const history = JSON.parse(localStorage.getItem('feiman_pomodoro_history') || '[]')
-    const dayPomodoro = history.find((h: any) => h.date === dateStr)
-    if (dayPomodoro) {
-      activities.push({
-        icon: Timer,
-        iconBg: 'bg-orange-50',
-        iconColor: 'text-orange-500',
-        title: '专注学习',
-        detail: `${dayPomodoro.count} 个番茄 · ${dayPomodoro.minutes} 分钟`,
-      })
-    }
-  } catch { /* 解析失败时忽略 */ }
+  const dayPomodoro = pomodoroHistoryForAnalytics.value.find((h: any) => h.date === dateStr)
+  if (dayPomodoro) {
+    activities.push({
+      icon: Timer,
+      iconBg: 'bg-orange-50',
+      iconColor: 'text-orange-500',
+      title: '专注学习',
+      detail: `${dayPomodoro.count} 个番茄 · ${dayPomodoro.minutes} 分钟`,
+    })
+  }
 
   selectedDateDetail.value = { date: formatDateShort(dateStr), activities }
 }

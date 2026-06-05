@@ -78,80 +78,101 @@
         </div>
       </div>
 
-      <!-- 讲解记录列表 -->
-      <div v-if="filteredSessions.length > 0" class="space-y-3">
+      <!-- 讲解记录列表（虚拟滚动） -->
+      <div v-if="filteredSessions.length > 0" class="relative">
+        <!-- 虚拟滚动容器 -->
         <div
-          v-for="session in filteredSessions"
-          :key="session.id"
-          class="relative overflow-hidden rounded-2xl"
+          ref="virtualScrollContainer"
+          class="space-y-3 overflow-y-auto"
+          style="max-height: 70vh;"
         >
-          <!-- 滑动操作背景层 -->
-          <div class="absolute inset-0 flex">
-            <div
-              class="flex-1 bg-emerald-500 flex items-center px-4"
-              :style="{ opacity: Math.min(1, swipeVal(session.id) / 80) }"
-            >
-              <Check :size="18" class="text-white mr-1" /> 标记完成
-            </div>
-            <div
-              class="flex-1 bg-red-500 flex items-center justify-end px-4"
-              :style="{ opacity: Math.min(1, Math.abs(swipeVal(session.id)) / 80) }"
-            >
-              删除 <Trash2 :size="18" class="text-white ml-1" />
-            </div>
-          </div>
-          <!-- 内容层 -->
-          <div
-            class="relative bg-white dark:bg-slate-800 shadow-sm p-4 cursor-pointer active:scale-[0.98] transition-transform duration-150 touch-none"
-            :style="{
-              transform: `translateX(${swipeVal(session.id)}px)`,
-              transition: swipeVal(session.id) === 0 ? 'transform 0.3s ease' : 'none'
-            }"
-            @click="handleClick(session)"
-            @touchstart.passive="handleSwipeStart(session.id, $event)"
-            @touchmove.prevent="handleSwipeMove(session.id, $event)"
-            @touchend="handleSwipeEnd(session.id)"
-          >
-          <div class="flex items-start justify-between gap-3">
-            <div class="flex-1 min-w-0">
-              <!-- 类型标签 + 标题 -->
-              <div class="flex items-center gap-2 mb-1.5">
-                <component
-                  :is="session.type === 'voice' ? Mic : FileText"
-                  :size="14"
-                  :class="session.type === 'voice' ? 'text-purple-500' : 'text-blue-500'"
-                />
-                <h3 class="text-sm font-semibold text-slate-800 dark:text-slate-100 truncate">{{ session.topicName }}</h3>
-              </div>
-
-              <!-- 日期 -->
-              <p class="text-xs text-slate-400">{{ formatDate(session.createdAt) }}</p>
-            </div>
-
-            <!-- 右侧操作区：分数 + 闪卡按钮 -->
-            <div class="shrink-0 flex items-center gap-2">
-              <!-- 创建闪卡按钮 -->
-              <button
-                class="w-9 h-9 rounded-xl bg-purple-50 dark:bg-purple-500/10 flex items-center justify-center text-purple-500 hover:bg-purple-100 dark:hover:bg-purple-500/20 active:scale-90 transition-all shrink-0"
-                title="根据此讲解生成闪卡"
-                @click.stop="generateFlashcard(session)"
-              >
-                <Layers :size="15" />
-              </button>
-              <!-- 分数 -->
+          <!-- 占位元素：撑开总高度 -->
+          <div :style="{ height: totalHeight + 'px', position: 'relative' }">
+            <!-- 可见项渲染区 -->
+            <div :style="{ transform: `translateY(${offsetY}px)` }">
               <div
-                class="w-11 h-11 rounded-xl flex flex-col items-center justify-center"
-                :style="{ backgroundColor: getScoreColor(session.score) + '12' }"
+                v-for="session in visibleSessions"
+                :key="session.id"
+                class="relative overflow-hidden rounded-2xl mb-3"
               >
-                <span
-                  class="text-sm font-bold tabular-nums"
-                  :style="{ color: getScoreColor(session.score) }"
-                >{{ session.score }}</span>
-                <span class="text-[9px] text-slate-400">分</span>
+                <!-- 滑动操作背景层 -->
+                <div class="absolute inset-0 flex">
+                  <div
+                    class="flex-1 bg-emerald-500 flex items-center px-4"
+                    :style="{ opacity: Math.min(1, swipeVal(session.id) / 80) }"
+                  >
+                    <Check :size="18" class="text-white mr-1" /> 标记完成
+                  </div>
+                  <div
+                    class="flex-1 bg-red-500 flex items-center justify-end px-4"
+                    :style="{ opacity: Math.min(1, Math.abs(swipeVal(session.id)) / 80) }"
+                  >
+                    删除 <Trash2 :size="18" class="text-white ml-1" />
+                  </div>
+                </div>
+                <!-- 内容层 -->
+                <div
+                  class="relative bg-white dark:bg-slate-800 shadow-sm p-4 cursor-pointer active:scale-[0.98] transition-transform duration-150 touch-none"
+                  :style="{
+                    transform: `translateX(${swipeVal(session.id)}px)`,
+                    transition: swipeVal(session.id) === 0 ? 'transform 0.3s ease' : 'none'
+                  }"
+                  @click="handleClick(session)"
+                  @touchstart.passive="handleSwipeStart(session.id, $event)"
+                  @touchmove.prevent="handleSwipeMove(session.id, $event)"
+                  @touchend="handleSwipeEnd(session.id)"
+                >
+                <div class="flex items-start justify-between gap-3">
+                  <div class="flex-1 min-w-0">
+                    <!-- 类型标签 + 标题 -->
+                    <div class="flex items-center gap-2 mb-1.5">
+                      <component
+                        :is="session.type === 'voice' ? Mic : FileText"
+                        :size="14"
+                        :class="session.type === 'voice' ? 'text-purple-500' : 'text-blue-500'"
+                      />
+                      <h3 class="text-sm font-semibold text-slate-800 dark:text-slate-100 truncate">{{ session.topicName }}</h3>
+                    </div>
+
+                    <!-- 日期 -->
+                    <p class="text-xs text-slate-400">{{ formatDate(session.createdAt) }}</p>
+                  </div>
+
+                  <!-- 右侧操作区：闪卡按钮 + 分数 + 删除按钮 -->
+                  <div class="shrink-0 flex items-center gap-2">
+                    <!-- 创建闪卡按钮 -->
+                    <button
+                      class="w-9 h-9 rounded-xl bg-purple-50 dark:bg-purple-500/10 flex items-center justify-center text-purple-500 hover:bg-purple-100 dark:hover:bg-purple-500/20 active:scale-90 transition-all shrink-0"
+                      title="根据此讲解生成闪卡"
+                      @click.stop="generateFlashcard(session)"
+                    >
+                      <Layers :size="15" />
+                    </button>
+                    <!-- 分数 -->
+                    <div
+                      class="w-11 h-11 rounded-xl flex flex-col items-center justify-center"
+                      :style="{ backgroundColor: getScoreColor(session.score) + '12' }"
+                    >
+                      <span
+                        class="text-sm font-bold tabular-nums"
+                        :style="{ color: getScoreColor(session.score) }"
+                      >{{ session.score }}</span>
+                      <span class="text-[9px] text-slate-400">分</span>
+                    </div>
+                    <!-- 删除按钮 -->
+                    <button
+                      class="w-9 h-9 rounded-xl bg-red-50 dark:bg-red-500/10 flex items-center justify-center text-red-400 hover:bg-red-100 dark:hover:bg-red-500/20 active:scale-90 transition-all shrink-0"
+                      title="删除这条讲解记录"
+                      @click.stop="confirmDelete(session)"
+                    >
+                      <Trash2 :size="15" />
+                    </button>
+                  </div>
+                </div>
+                <!-- 内容层结束 -->
+                </div>
               </div>
             </div>
-          </div>
-          <!-- 内容层结束 -->
           </div>
         </div>
       </div>
@@ -271,7 +292,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch, onMounted, inject, onUnmounted } from 'vue'
+import { ref, computed, onMounted, inject, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import {
   Mic,
@@ -288,6 +309,7 @@ import {
 import type { FeynmanSession } from '@/types'
 import { usePullRefresh } from '@/composables/usePullRefresh'
 import { useUndoRedo } from '@/composables/useUndoRedo'
+import { useVirtualScroll } from '@/composables/useVirtualScroll'
 
 const router = useRouter()
 
@@ -394,6 +416,7 @@ let isLongPress = false
 /**
  * 从 localStorage 读取 feiman_sessions 并转换为展示格式
  * 兼容旧数据：缺少字段时使用默认值
+ * 使用 topics 缓存避免 N+1 次 localStorage 读取
  */
 function loadSessions(): DisplaySession[] {
   try {
@@ -402,13 +425,27 @@ function loadSessions(): DisplaySession[] {
 
     const parsed: unknown[] = JSON.parse(raw)
 
+    // 一次性加载 topics 缓存，避免 N+1 次读取
+    let topicsCache: Array<{ id: string; title: string }> | null = null
+    function getTopicsCache(): Array<{ id: string; title: string }> {
+      if (!topicsCache) {
+        try {
+          const topicsRaw = localStorage.getItem('feiman_topics')
+          topicsCache = topicsRaw ? JSON.parse(topicsRaw) : []
+        } catch {
+          topicsCache = []
+        }
+      }
+      return topicsCache
+    }
+
     return parsed.map((item): DisplaySession => {
       // 兼容 FeynmanSession 标准格式
       const session = item as Record<string, unknown>
       return {
         id: (session.id as string) || '',
         topicId: (session.topicId as string) || '',
-        topicName: resolveTopicName(session),
+        topicName: resolveTopicNameCached(session, getTopicsCache()),
         content: (session.content as string) || '',
         score: typeof session.score === 'number' ? session.score : 0,
         type: (session.type === 'voice' ? 'voice' : 'text') as 'text' | 'voice',
@@ -421,12 +458,9 @@ function loadSessions(): DisplaySession[] {
 }
 
 /**
- * 解析主题名称：
- * - 尝试从 feiman_topics 中根据 topicId 匹配 title
- * - 找不到则截取 content 前 20 字作为 fallback
- * - 再不行显示"未知主题"
+ * 使用缓存的 topics 解析主题名称（避免 N+1 读取）
  */
-function resolveTopicName(session: Record<string, unknown>): string {
+function resolveTopicNameCached(session: Record<string, unknown>, topicsCache: Array<{ id: string; title: string }>): string {
   // 旧数据可能直接有 topic 字段
   if ((session as Record<string, unknown>).topic) {
     return String((session as Record<string, unknown>).topic)
@@ -434,16 +468,8 @@ function resolveTopicName(session: Record<string, unknown>): string {
 
   const topicId = session.topicId as string | undefined
   if (topicId) {
-    try {
-      const topicsRaw = localStorage.getItem('feiman_topics')
-      if (topicsRaw) {
-        const topics: Array<{ id: string; title: string }> = JSON.parse(topicsRaw)
-        const found = topics.find((t) => t.id === topicId)
-        if (found) return found.title
-      }
-    } catch {
-      // 忽略解析错误
-    }
+    const found = topicsCache.find((t) => t.id === topicId)
+    if (found) return found.title
   }
 
   // 从内容中提取前20字作为主题名
@@ -479,13 +505,7 @@ function handleGlobalKeydown(e: KeyboardEvent): void {
   }
 }
 
-// 监听 localStorage 变化（跨标签页同步）
-watch(
-  () => localStorage.getItem('feiman_sessions'),
-  () => {
-    sessions.value = loadSessions()
-  }
-)
+// 监听跨标签页 localStorage 变化（通过 storage 事件）
 
 // ==================== 计算属性 ====================
 
@@ -522,6 +542,21 @@ const avgScore = computed(() => {
 const voiceCount = computed(() =>
   filteredSessions.value.filter((s) => s.type === 'voice').length
 )
+
+// ==================== 虚拟滚动 ====================
+
+const VIRTUAL_ITEM_HEIGHT = 128
+const VIRTUAL_CONTAINER_HEIGHT = 600
+
+const { visibleItems: visibleSessions, offsetY, totalHeight, init: initVirtualScroll } = useVirtualScroll<DisplaySession>({
+  items: filteredSessions.value,
+  itemHeight: VIRTUAL_ITEM_HEIGHT,
+  containerHeight: VIRTUAL_CONTAINER_HEIGHT,
+  overscan: 3,
+})
+
+/** 虚拟滚动容器引用 */
+const virtualScrollContainer = ref<HTMLElement | null>(null)
 
 // ==================== 工具函数 ====================
 
@@ -701,6 +736,17 @@ onMounted(() => {
   }
   // 注册撤销/重做全局快捷键
   window.addEventListener('keydown', handleGlobalKeydown)
+  // 监听跨标签页 localStorage 变化
+  const onStorageChange = (e: StorageEvent) => {
+    if (e.key === 'feiman_sessions') {
+      sessions.value = loadSessions()
+    }
+  }
+  window.addEventListener('storage', onStorageChange)
+  // 初始化虚拟滚动
+  if (virtualScrollContainer.value) {
+    initVirtualScroll(virtualScrollContainer.value)
+  }
 })
 
 onUnmounted(() => {

@@ -334,10 +334,15 @@ TCP三次握手的过程</pre>
             </div>
 
             <button
-              class="w-full py-2.5 rounded-xl text-sm font-medium bg-pink-500 text-white active:bg-pink-600 flex items-center justify-center gap-1.5"
-              @click="exportWord()"
+              class="w-full py-2.5 rounded-xl text-sm font-medium bg-pink-500 text-white active:bg-pink-600 flex items-center justify-center gap-1.5 disabled:opacity-60"
+              :disabled="isExporting"
+              @click="handleExportWord"
             >
-              <Printer :size="16" /> 导出为 Word 文档（可打印）
+              <svg v-if="isExporting" class="animate-spin h-4 w-4 mr-1" viewBox="0 0 24 24" fill="none">
+                <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="3" opacity="0.25"/>
+                <path d="M4 12a8 8 0 018-8" stroke="currentColor" stroke-width="3" stroke-linecap="round"/>
+              </svg>
+              {{ isExporting ? '正在生成...' : '导出为 Word 文档（可打印）' }}
             </button>
           </div>
         </div>
@@ -398,7 +403,6 @@ TCP三次握手的过程</pre>
 import { ref, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { ArrowLeft, ChevronRight, ShieldCheck, Upload, Download, Check, Archive, Database, Printer } from 'lucide-vue-next'
-import { mockCards } from '@/utils/mock'
 import { useToast } from '@/composables/useToast'
 import { useAutoBackup } from '@/composables/useAutoBackup'
 
@@ -427,6 +431,9 @@ function formatSize(size: number): string {
   if (size < 1024 * 1024) return `${(size / 1024).toFixed(1)} KB`
   return `${(size / 1024 / 1024).toFixed(1)} MB`
 }
+
+/** 导出进行中 */
+const isExporting = ref(false)
 
 // 当前展开的格式详情
 const expandedFormat = ref<string | null>(null)
@@ -590,19 +597,27 @@ function handleFileImport(format: string, event: Event) {
 
       if (parsed.length > 0) {
         previewData.value = parsed
-        // 自动追加到现有卡片池
+        // 写入 localStorage 而不是污染 mockCards
+        const cardsKey = 'feiman_review_cards'
+        const existingRaw = localStorage.getItem(cardsKey) || localStorage.getItem('feiman_cards') || '[]'
+        const existing = JSON.parse(existingRaw)
         for (const item of parsed) {
-          mockCards.push({
+          existing.push({
             id: crypto.randomUUID(),
             topicId: item.topic || `导入-${file.name}`,
             question: item.question,
             answer: item.answer,
-            dueAt: new Date().toISOString(),
+            tags: ['导入'],
+            deck: 'default',
             interval: 1,
             easeFactor: 2.5,
+            repetition: 0,
+            nextReview: new Date(Date.now() + 86400000).toISOString(),
             reviewCount: 0,
+            createdAt: new Date().toISOString(),
           })
         }
+        localStorage.setItem(cardsKey, JSON.stringify(existing))
       } else {
         showToast('未能解析出有效数据，请检查文件格式是否符合要求', 'error')
       }
@@ -701,18 +716,40 @@ const totalWordItems = computed(() => {
 })
 
 /**
+ * 导出 Word 包装函数（管理 loading 状态）
+ */
+async function handleExportWord() {
+  isExporting.value = true
+  try {
+    await exportWord()
+    showToast('导出成功！', 'success')
+  } catch (e) {
+    showToast('导出失败：' + (e instanceof Error ? e.message : '未知'), 'error')
+  } finally {
+    isExporting.value = false
+  }
+}
+
+/**
  * 导出为格式化的 Word 文档（HTML 格式，可打印）
  * 特点：
  * - 真实数据从 localStorage 读取
  * - 打印级排版：封面、目录、分节、页眉页脚
  * - A4 纸张适配，边距合理
  * - 支持选择导出内容
+ * - 异步分片构建，避免 UI 卡顿
  */
-function exportWord() {
+async function exportWord() {
   const now = new Date()
   const dateStr = now.toLocaleDateString('zh-CN')
   const d = wordRealData.value
   const sel = selectedWordExports.value
+
+  // 限制导出数量，避免浏览器崩溃
+  const maxItems = 500
+  if (d.cards.length > maxItems) d.cards = d.cards.slice(0, maxItems)
+  if (d.sessions.length > maxItems) d.sessions = d.sessions.slice(0, maxItems)
+  if (d.notes.length > maxItems) d.notes = d.notes.slice(0, maxItems)
 
   // ====== 构建文档 HTML ======
   let sectionsHtml = ''
@@ -759,6 +796,8 @@ function exportWord() {
       <p style="font-size:11px;color:#94a3b8;margin:0 0 12px;">共 ${d.topics.length} 条路径 · 生成于 ${dateStr}</p>
       ${topicsContent}`
   }
+  // 让出主线程，避免 UI 卡顿
+  await new Promise(r => setTimeout(r, 0))
 
   // ---- 第二部分：闪卡复习表 ----
   if (sel.has('cards') && d.cards.length > 0) {
@@ -801,6 +840,8 @@ function exportWord() {
       <p style="font-size:11px;color:#94a3b8;margin:0 0 12px;">共 ${d.cards.length} 张闪卡 · 可用于自测和背诵</p>
       ${cardsTable}`
   }
+  // 让出主线程，避免 UI 卡顿
+  await new Promise(r => setTimeout(r, 0))
 
   // ---- 第三部分：讲解记录 ----
   if (sel.has('sessions') && d.sessions.length > 0) {
@@ -829,6 +870,8 @@ function exportWord() {
       <p style="font-size:11px;color:#94a3b8;margin:0 0 12px;">共 ${d.sessions.length} 条记录 · 按评分排序</p>
       ${sessionsContent}`
   }
+  // 让出主线程，避免 UI 卡顿
+  await new Promise(r => setTimeout(r, 0))
 
   // ---- 第四部分：学习笔记 ----
   if (sel.has('notes') && d.notes.length > 0) {
@@ -848,6 +891,8 @@ function exportWord() {
       <p style="font-size:11px;color:#94a3b8;margin:0 0 12px;">共 ${d.notes.length} 条笔记</p>
       ${notesContent}`
   }
+  // 让出主线程，避免 UI 卡顿
+  await new Promise(r => setTimeout(r, 0))
 
   // ====== 组装完整 HTML ======
   const html = `

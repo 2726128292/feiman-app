@@ -2,7 +2,7 @@ import { ref, computed, onMounted, watchEffect } from 'vue'
 import { useStorage } from './useStorage'
 
 export function useTheme() {
-  const darkMode = useStorage<boolean>('feiman_dark_mode', false)
+  const { data: darkMode } = useStorage<boolean>('feiman_dark_mode', false)
 
   const isDark = computed(() => darkMode.value)
 

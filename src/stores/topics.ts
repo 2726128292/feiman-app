@@ -4,7 +4,7 @@ import type { StudyTopic } from '@/types'
 import { mockTopics } from '@/utils/mock'
 
 export const useTopicStore = () => {
-  const topics = useStorage<StudyTopic[]>('feiman_topics', mockTopics)
+  const { data: topics } = useStorage<StudyTopic[]>('feiman_topics', mockTopics)
 
   const activeTopics = computed(() => topics.value.filter(t => t.status === 'active'))
 

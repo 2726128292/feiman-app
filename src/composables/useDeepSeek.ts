@@ -32,7 +32,7 @@ const defaultConfig: DeepSeekConfig = {
 
 // ====== 状态管理 ======
 
-const config = useStorage<DeepSeekConfig>(STORAGE_KEY, defaultConfig)
+const { data: config } = useStorage<DeepSeekConfig>(STORAGE_KEY, defaultConfig)
 const isLoading = ref(false)
 const lastError = ref<string>('')
 
