@@ -2,7 +2,7 @@ import { useStorage } from '@/composables/useStorage'
 import type { UserProfile } from '@/types'
 
 export const useUserStore = () => {
-  const profile = useStorage<UserProfile>('feiman_user_profile', {
+  const { data: profile } = useStorage<UserProfile>('feiman_user_profile', {
     userName: 'Alex Walker',
     avatar: '',
     level: 12,

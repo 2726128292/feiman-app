@@ -549,7 +549,7 @@ const VIRTUAL_ITEM_HEIGHT = 128
 const VIRTUAL_CONTAINER_HEIGHT = 600
 
 const { visibleItems: visibleSessions, offsetY, totalHeight, init: initVirtualScroll } = useVirtualScroll<DisplaySession>({
-  items: filteredSessions.value,
+  items: filteredSessions,
   itemHeight: VIRTUAL_ITEM_HEIGHT,
   containerHeight: VIRTUAL_CONTAINER_HEIGHT,
   overscan: 3,

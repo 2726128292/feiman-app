@@ -1,11 +1,11 @@
-import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { ref, computed, onUnmounted, type Ref } from 'vue'
 
 /**
  * 虚拟滚动 Hook（简化版）
  * 只渲染可视区域内的列表项，适用于长列表性能优化
  */
 export function useVirtualScroll<T>(options: {
-  items: T[]
+  items: T[] | Ref<T[]>
   itemHeight: number
   containerHeight: number
   overscan?: number
@@ -14,8 +14,11 @@ export function useVirtualScroll<T>(options: {
   const scrollTop = ref(0)
   let containerEl: HTMLElement | null = null
 
+  /** 解构 items（支持 Ref 和普通数组） */
+  const itemsRef = 'value' in options.items ? (options.items as Ref<T[]>) : ref(options.items)
+
   /** 总条目数 */
-  const totalCount = computed(() => options.items.length)
+  const totalCount = computed(() => itemsRef.value.length)
 
   /** 总内容高度 */
   const totalHeight = computed(() => totalCount.value * options.itemHeight)
@@ -34,7 +37,7 @@ export function useVirtualScroll<T>(options: {
 
   /** 当前可见的子集 */
   const visibleItems = computed(() =>
-    options.items.slice(startIndex.value, endIndex.value + 1)
+    itemsRef.value.slice(startIndex.value, endIndex.value + 1)
   )
 
   /** 顶部偏移量（撑开空白区域） */
